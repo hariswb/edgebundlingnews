@@ -179,7 +179,8 @@ function EdgeBundling(rawData, treeData, rawSimilarityDimensions) {
     .append("text")
     .attr("class", "node-text")
     .attr("id", d => "node" + `${d.data.id}`)
-    .attr("fill", props.nodeColor)
+    .style("font-family", "Gotham")
+    .attr("stroke", (d, i) => i === 0 ? "#edaa24" : props.nodeColor)
     .style("cursor", "pointer")
     .style("pointer-events", "click")
     .attr("dy", "0.31em")
@@ -267,6 +268,7 @@ function EdgeBundling(rawData, treeData, rawSimilarityDimensions) {
   const groupText = groupG
     .join("text")
     // .style("pointer-events", "none")
+    .style("font-family", "Gotham")
     .attr("rotate", (d) =>
       (d.start + (d.end - d.start) / 2) > Math.PI ? "180" : "0")
 
@@ -667,7 +669,7 @@ function EdgeBundling(rawData, treeData, rawSimilarityDimensions) {
           )};">
                       <p style="color:white;">${val.similarity}%</p>
                     </div>
-                    <p><span ><strong>${data.group}</strong></span><br>
+                    <p><span class="tooltip-element-title"><strong>${data.group}</strong></span><br>
                         <span class="tooltip-list-element-text">${data.text
               .split(" ")
               .slice(0, 5)
@@ -701,10 +703,9 @@ function EdgeBundling(rawData, treeData, rawSimilarityDimensions) {
     $(".node-text").d3Mouseout()
     d3.select("#tooltip").style("visibility", "hidden");
   }
-  console.log(root.children.length / root.leaves().length)
 
   function drawLabelLines(deg, start, end, groupName) {
-    const outer = radius + props.textEstimateL + props.arcWidth
+    const outer = radius + props.textEstimateL * 1.2 + props.arcWidth
     const assumedLeaves = root.leaves().length + root.children.length
     let factor = ((deg / (Math.PI * 2) * assumedLeaves) % (assumedLeaves / 2)) - (assumedLeaves / 4)
     factor = deg >= Math.PI ? factor : -factor
@@ -750,8 +751,8 @@ function EdgeBundling(rawData, treeData, rawSimilarityDimensions) {
     const radNode = props.nodeFontSize / (radius + props.textEstimateL) / 2
     const arc =
       d3.arc()
-        .innerRadius(radius + props.textEstimateL)
-        .outerRadius(radius + props.textEstimateL + props.arcWidth)
+        .innerRadius(radius + props.textEstimateL * 1.2)
+        .outerRadius(radius + props.textEstimateL * 1.2 + props.arcWidth)
         .startAngle((d) => {
           const start = d.end - d.start == 0 ? d.start - radNode : d.start
           const end = d.end - d.start == 0 ? d.end + radNode : d.end
