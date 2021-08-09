@@ -29,7 +29,7 @@ function EdgeBundling(rawData, treeData, rawSimilarityDimensions) {
       : d3.rgb(color).darker(2).toString();
   };
 
-  let darkMode = null;
+  let darkMode = true;
 
   let deltaRad = 0
 
@@ -422,12 +422,12 @@ function EdgeBundling(rawData, treeData, rawSimilarityDimensions) {
   function handleDarkMode() {
     const toggleDark = d3.select("#toggle-dark");
     const localStorage = window.localStorage;
-    darkMode =
-      localStorage.darkMode === undefined
-        ? toggleDark.node().checked
-        : localStorage.darkMode;
 
-    darkMode = darkMode === "true" ? true : false;
+    if (localStorage.darkMode === undefined) {
+      darkMode = darkMode
+    } else {
+      darkMode = darkMode === "true" ? true : false;
+    }
 
     toggleDark.node().checked = darkMode;
     setColorMode();
@@ -572,6 +572,7 @@ function EdgeBundling(rawData, treeData, rawSimilarityDimensions) {
         : k.similarity_dimension !== "all";
     });
 
+
     d3.selectAll(
       pairedNodes.map((k) => {
         return k.path;
@@ -603,6 +604,31 @@ function EdgeBundling(rawData, treeData, rawSimilarityDimensions) {
         const val = targetText.get(k.data.id).similarity_dimension;
         return dimensions.includes(val) ? linkColors(val) : props.nodeColor();
       });
+
+
+    const pairedGroups = pairedNodes.map(k => {
+      let g = ""
+      if (k[0].group !== d.group) {
+        g = k[0].group
+      } else if (k[1].group !== d.group) {
+        g = k[1].group
+      }
+      return {
+        group: g,
+        similarity_dimension: k.similarity_dimension
+      }
+    })
+
+
+    groupLabelArc.attr("fill", k => {
+      const targetIndex = pairedGroups.map(p => p.group).indexOf(k.groupName)
+      return targetIndex > -1 ?
+        linkColors(pairedGroups[targetIndex].similarity_dimension) : props.groupLinesColor()
+    }).attr("opacity", k => {
+      console.log(d, k)
+
+      return k.groupName === d.group ? 1 : props.groupLabelOpacity
+    })
   }
 
   function nodeOuted(event, d) {
@@ -625,6 +651,9 @@ function EdgeBundling(rawData, treeData, rawSimilarityDimensions) {
     )
       .attr("fill", props.nodeColor)
       .attr("font-weight", null);
+
+    groupLabelArc.attr("fill", props.groupLinesColor)
+      .attr("opacity", props.groupLabelOpacity)
   }
 
   function nodeClicked(event, d) {
