@@ -180,7 +180,7 @@ function EdgeBundling(rawData, treeData, rawSimilarityDimensions) {
     .attr("class", "node-text")
     .attr("id", d => "node" + `${d.data.id}`)
     .style("font-family", "Gotham")
-    .attr("stroke", (d, i) => i === 0 ? "#edaa24" : props.nodeColor)
+    .attr("stroke", props.nodeColor)
     .style("cursor", "pointer")
     .style("pointer-events", "click")
     .attr("dy", "0.31em")
@@ -246,14 +246,15 @@ function EdgeBundling(rawData, treeData, rawSimilarityDimensions) {
       return drawLabelLines(radian, d.start, d.end, d.groupName)
     })
 
-
-
-
   const groupLabelArc = groupG
     .join("path")
     .attr("id", (d) => ("arc" + d.groupName).replace(/\s/g, ""))
-    .attr("fill", props.groupLinesColor)
-    .attr("opacity", props.groupLabelOpacity)
+    .attr("fill", (d, i) => {
+      return i === 0 ? linkColors(d.similarity_dimension) : props.groupLinesColor
+    })
+    .attr("opacity", (d, i) => {
+      return i === 0 ? 1 : props.groupLabelOpacity
+    })
     .call(drawLabelArc)
 
   const groupLabelBg = groupG
@@ -606,29 +607,27 @@ function EdgeBundling(rawData, treeData, rawSimilarityDimensions) {
       });
 
 
-    const pairedGroups = pairedNodes.map(k => {
-      let g = ""
-      if (k[0].group !== d.group) {
-        g = k[0].group
-      } else if (k[1].group !== d.group) {
-        g = k[1].group
-      }
-      return {
-        group: g,
-        similarity_dimension: k.similarity_dimension
-      }
-    })
+    // const pairedGroups = pairedNodes.map(k => {
+    //   let g = ""
+    //   if (k[0].group !== d.group) {
+    //     g = k[0].group
+    //   } else if (k[1].group !== d.group) {
+    //     g = k[1].group
+    //   }
+    //   return {
+    //     group: g,
+    //     similarity_dimension: k.similarity_dimension
+    //   }
+    // })
 
 
-    groupLabelArc.attr("fill", k => {
-      const targetIndex = pairedGroups.map(p => p.group).indexOf(k.groupName)
-      return targetIndex > -1 ?
-        linkColors(pairedGroups[targetIndex].similarity_dimension) : props.groupLinesColor()
-    }).attr("opacity", k => {
-      console.log(d, k)
-
-      return k.groupName === d.group ? 1 : props.groupLabelOpacity
-    })
+    // groupLabelArc.attr("fill", k => {
+    //   const targetIndex = pairedGroups.map(p => p.group).indexOf(k.groupName)
+    //   return targetIndex > -1 ?
+    //     linkColors(pairedGroups[targetIndex].similarity_dimension) : props.groupLinesColor()
+    // }).attr("opacity", k => {
+    //   return k.groupName === d.group ? 1 : props.groupLabelOpacity
+    // })
   }
 
   function nodeOuted(event, d) {
@@ -652,8 +651,6 @@ function EdgeBundling(rawData, treeData, rawSimilarityDimensions) {
       .attr("fill", props.nodeColor)
       .attr("font-weight", null);
 
-    groupLabelArc.attr("fill", props.groupLinesColor)
-      .attr("opacity", props.groupLabelOpacity)
   }
 
   function nodeClicked(event, d) {
@@ -781,7 +778,10 @@ function EdgeBundling(rawData, treeData, rawSimilarityDimensions) {
     const arc =
       d3.arc()
         .innerRadius(radius + props.textEstimateL * 1.2)
-        .outerRadius(radius + props.textEstimateL * 1.2 + props.arcWidth)
+        .outerRadius((d, i) => {
+          const extension = i === 0 ? 2 : 0
+          return radius + props.textEstimateL * 1.2 + props.arcWidth + extension
+        })
         .startAngle((d) => {
           const start = d.end - d.start == 0 ? d.start - radNode : d.start
           const end = d.end - d.start == 0 ? d.end + radNode : d.end
