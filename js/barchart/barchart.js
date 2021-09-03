@@ -164,7 +164,7 @@ BarChart.prototype.addDataFilter = function () {
         _this.app.dataRange.end = x1
 
         _this.updateBrushTip()
-        // _this.app.updateApp()
+        _this.app.update()
     }
 }
 

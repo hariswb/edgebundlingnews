@@ -1,137 +1,169 @@
 const EdgeBundling = function (app) {
     this.app = app
-    const rawData = this.app.rawData
-    const treeData = this.app.treeData
-    let similarityDimensions = this.app.similarityDimensions
+    this.setUp()
+    this.addLayers()
+    this.init()
+}
 
-    let groupBy = "parent_site";
+EdgeBundling.prototype.setUp = function () {
+    const _this = this
+    this.dimensions = [];
+    this.groupBy = "parent_site";
 
-    let dimensions = [];
-    let dimensionAll = false;
+    this.dimensions = [];
+    this.dimensionAll = false;
 
-    const setGroupBy = (value) => {
-        groupBy = value;
-    };
+    this.linkColors = d3.scaleOrdinal().range(d3.schemeSet1);
 
-    const setDimensions = (k) => {
-        dimensions = [k];
-    };
-
-    const linkColors = d3.scaleOrdinal().range(d3.schemeSet1);
-
-    const darken = function (color) {
-        return darkMode
+    this.darken = function (color) {
+        return _this.app.darkMode
             ? d3.rgb(color).brighter(3).toString()
             : d3.rgb(color).darker(2).toString();
     };
 
-    let darkMode = true;
+    this.deltaRad = 0
 
-    let deltaRad = 0
+    this.prevWheeled = ""
 
-    let prevWheeled = ""
-
-    const initTransform = {}
-
-    const props = {
-        linkBaseColor: "#aaa",
-        linkWidth: 1,
-        linkWidthHighlight: 3,
-        nodeColor: () => (darkMode ? "#eee" : "#444"),
-        nodeFontSize: 10,
-        nodeFontSizeBold: 16,
-        nodeMargin: 2,
-        inputBgColor: "#ccc",
-        controlBoxBg: () => (darkMode ? "#666" : "#fff"),
-        controlBoxColor: () => (darkMode ? "#fff" : "#111"),
-        controlBoxColor2: () => (darkMode ? "#444" : "#eee"),
-        inputBgAll: "#444",
-        colorHighlight: "red",
-        windowHeight: window.innerHeight,
-        windowWidth: window.innerWidth,
-        arcWidth: 5,
-        arcMargin: 0,
-        bgColor: () => (darkMode ? "#222" : "#fff"),
-        groupLabelSize: 22,
-        groupLabelRatio: 0.45,
-        groupLinesColor: () => darkMode ? "#fff" : "#111",
-        groupLabelOpacity: 0.4,
-        tooltipBg: () => (darkMode ? "#ddd" : "#fff"),
-        textEstimateL: 200,
-    };
-
-
-    const nodesNumber = treeData.children
+    this.nodesNumber = this.app.treeData.children
         .map((d) => d.children.length)
         .reduce((sum, x) => sum + x);
 
-    const radius =
-        ((nodesNumber + treeData.children.length) * (props.nodeFontSize + props.nodeMargin)) / (2 * Math.PI); // props.windowHeight / 2;
+    this.radius =
+        ((this.nodesNumber + this.app.treeData.children.length) * (this.app.props.nodeFontSize + this.app.props.nodeMargin)) / (2 * Math.PI); // props.windowHeight / 2;
 
-    const controlBoxHeight = d3.select(".control").node().getBoundingClientRect()
+    this.controlBoxHeight = d3.select(".control").node().getBoundingClientRect()
         .height;
 
-    const tree = d3.cluster().size([2 * Math.PI, radius]);
-
-    const root = tree(bilink(d3.hierarchy(treeData)));
-
-    const line = d3
-        .lineRadial()
-        .curve(d3.curveBundle.beta(0.85))
-        .radius((d) => d.y - props.arcWidth - props.arcMargin)
+    this.line = d3.lineRadial().curve(d3.curveBundle.beta(0.85))
+        .radius((d) => d.y - this.app.props.arcWidth - this.app.props.arcMargin)
         .angle((d) => d.x);
 
-    this.app.svgEdgebundling.on("click", () => {
-        enableSoundNotice.style("display", "none")
-    })
+}
 
-    const layerBg = this.app.svgEdgebundling.append("g").attr("class", "bg");
-    const layerChart = this.app.svgEdgebundling.append("g").attr("class", "chart")
-    const layerEdgeBundling = layerChart.append("g").attr("class", "edgebundling").call(transformInit)
-    const layerWheel = layerEdgeBundling.append("g").attr("class", "wheel")
-    const layerNodes = layerEdgeBundling.append("g").attr("class", "nodes");
-    const layerLinks = layerEdgeBundling.append("g").attr("class", "links");
-    const layerGroupLabel = layerEdgeBundling.append("g").attr("class", "arcs");
 
-    layerChart
-        .style("cursor", "pointer")
+EdgeBundling.prototype.setDimensions = function (k) {
+    this.dimensions = k
+}
 
-    const bg = layerBg
+EdgeBundling.prototype.addLayers = function () {
+    const _this = this
+    this.layerBg = this.app.svgEdgebundling.append("g").attr("class", "bg");
+    this.layerChart = this.app.svgEdgebundling.append("g").attr("class", "chart").style("cursor", "pointer")
+    this.layerEdgeBundling = this.layerChart.append("g").attr("class", "edgebundling").call(transformInit)
+    this.layerWheel = this.layerEdgeBundling.append("g").attr("class", "wheel")
+    this.layerNodes = this.layerEdgeBundling.append("g").attr("class", "nodes");
+    this.layerLinks = this.layerEdgeBundling.append("g").attr("class", "links");
+    this.layerGroupLabel = this.layerEdgeBundling.append("g").attr("class", "arcs");
+
+    function transformInit(g) {
+        const k =
+            (_this.app.props.windowHeight - _this.controlBoxHeight) / 2 / (_this.radius + _this.app.props.textEstimateL);
+        const x = _this.app.props.windowWidth / 2
+        const y = (_this.radius + _this.app.props.textEstimateL * 2) * k
+        g.attr(
+            "transform",
+            `translate(${x},${y}) scale(${k})`
+        );
+    }
+}
+
+EdgeBundling.prototype.init = function () {
+    this.addBg()
+    this.addTooltip()
+    this.addAudio()
+    this.addWheel()
+    this.addDocumentCounts()
+    this.addController()
+
+    this.addZoomEvent()
+    this.addWheelEvent()
+}
+
+EdgeBundling.prototype.render = function () {
+    this.nodesNumber = this.app.treeData.children
+        .map((d) => d.children.length)
+        .reduce((sum, x) => sum + x);
+
+    this.radius =
+        ((this.nodesNumber + this.app.treeData.children.length) * (this.app.props.nodeFontSize + this.app.props.nodeMargin)) / (2 * Math.PI); // props.windowHeight / 2;
+
+    this.controlBoxHeight = d3.select(".control").node().getBoundingClientRect()
+        .height;
+
+    this.tree = d3.cluster().size([2 * Math.PI, this.radius]);
+    this.root = this.tree(bilink(d3.hierarchy(this.app.treeData)));
+
+    this.addWheel()
+    this.addNode()
+    this.addLink()
+    this.addGroupLabel()
+
+    this.update()
+}
+
+EdgeBundling.prototype.update = function () {
+    this.dimensions = ["all"];
+    this.dimensionAll = !this.dimensionAll;
+    d3.select(`#dimension-all`).classed("active", this.dimensionAll ? true : false);
+    this.setColor()
+    this.inputsUpdate();
+    this.updateLink();
+}
+
+EdgeBundling.prototype.addBg = function () {
+    this.bg = this.layerBg
         .append("rect")
         .attr("x", 0)
         .attr("y", 0)
-        .attr("width", props.windowWidth)
-        .attr("height", props.windowHeight)
-        .attr("fill", props.bgColor)
+        .attr("width", this.app.props.windowWidth)
+        .attr("height", this.app.props.windowHeight)
+        .attr("fill", this.app.props.bgColor)
         .on("click", clickBg);
 
-    const wheel = layerWheel
+    function clickBg(event, d) {
+        $(".node-text").d3Mouseout()
+        d3.select("#tooltip").style("visibility", "hidden");
+    }
+}
+
+EdgeBundling.prototype.addWheel = function () {
+    d3.select(".wheel-path").remove()
+    d3.select(".wheel-needle").remove()
+    this.wheel = this.layerWheel
         .append("path")
+        .attr("class", "wheel-path")
         .attr("d", d3.arc()
-            .innerRadius(radius)
-            .outerRadius(radius + props.textEstimateL * 1.5)
+            .innerRadius(this.radius)
+            .outerRadius(this.radius + this.app.props.textEstimateL * 1.5)
             .startAngle(0)
             .endAngle(2 * Math.PI))
 
-    const wheelNeedle = layerWheel.append("rect")
-        .attr("x", radius)
-        .attr("y", -props.nodeFontSize * 1.5)
-        .attr("width", props.textEstimateL)
-        .attr("height", props.nodeFontSize * 2)
-        .attr("fill", props.groupLinesColor)
+    this.wheelNeedle = this.layerWheel.append("rect")
+        .attr("class", "wheel-needle")
+        .attr("x", this.radius)
+        .attr("y", -this.app.props.nodeFontSize * 1.5)
+        .attr("width", this.app.props.textEstimateL)
+        .attr("height", this.app.props.nodeFontSize * 2)
+        .attr("fill", this.app.props.groupLinesColor)
         .attr("opacity", 0.1)
+}
 
-    const documentCounts = d3.select("#document-counts").html(rawData.length);
+EdgeBundling.prototype.addDocumentCounts = function (params) {
+    const documentCounts = d3.select("#document-counts").html(this.app.rawData.length);
+}
 
-    const inputsDimension = d3
+EdgeBundling.prototype.addController = function (params) {
+    const _this = this
+    this.inputsDimension = d3
         .select("#similarity-dimension")
         .selectAll("div")
-        .data(similarityDimensions)
+        .data(this.app.similarityDimensions)
         .join("div")
-        .style("background-color", props.inputBgColor)
+        .style("background-color", this.app.props.inputBgColor)
         .attr("class", "button");
 
-    const inputsDimensionText = inputsDimension
+    this.inputsDimensionText = this.inputsDimension
         .append("span")
         .style("background-color", "transparent")
         .attr("class", "noselect")
@@ -142,65 +174,268 @@ const EdgeBundling = function (app) {
         .attr("value", (k) => k)
         .on("click", handleInput);
 
-    const inputsGroupBy = d3
+    this.inputsGroupBy = d3
         .select("#group-by")
         .append("div")
         .attr("class", "button")
-        .style("background-color", props.inputBgColor)
-        .html(groupBy);
+        .style("background-color", this.app.props.inputBgColor)
+        .html(this.groupBy);
 
-    const node = layerNodes
+    function handleInput(event, k) {
+        d3.selectAll(".dimension").classed("active", false);
+        d3.select(`#dimension-${k}`).classed("active", true);
+
+        if (k === "all") {
+            _this.dimensionAll = !_this.dimensionAll ? !_this.dimensionAll : _this.dimensionAll;
+            _this.dimensions = _this.dimensionAll ? ["all"] : [];
+            d3.selectAll(".dimension").classed("active", false);
+            d3.select(`#dimension-all`).classed(
+                "active",
+                _this.dimensionAll ? true : false
+            );
+        } else {
+            if (_this.dimensionAll) {
+                _this.dimensionAll = !_this.dimensionAll;
+                _this.dimensions = [];
+                d3.select(`#dimension-all`).classed("active", false);
+            }
+            _this.setDimensions(k);
+            if (_this.dimensions.length === 0) {
+                _this.dimensions = ["all"];
+                _this.dimensionAll = !_this.dimensionAll;
+                d3.select(`#dimension-all`).classed("active", true);
+                d3.select(`#dimension-all`).classed(
+                    "active",
+                    _this.dimensionAll ? true : false
+                );
+            }
+        }
+        _this.updateLink();
+        //_this.setDimensions(k);
+        _this.inputsUpdate();
+
+
+    }
+}
+
+EdgeBundling.prototype.inputsUpdate = function () {
+    const _this = this
+    this.inputsDimension.style("background-color", (k) => {
+        if (k === "all") {
+            return _this.dimensionAll ? _this.linkColors(k) : _this.app.props.inputBgColor;
+        } else {
+            return _this.dimensions.includes(k) ? _this.linkColors(k) : _this.app.props.inputBgColor;
+        }
+    });
+}
+
+EdgeBundling.prototype.addNode = function () {
+    const _this = this
+
+    this.node = this.layerNodes
         .attr("font-family", "sans-serif")
-        .attr("font-size", props.nodeFontSize)
+        .attr("font-size", this.app.props.nodeFontSize)
         .selectAll("g")
-        .data(root.leaves())
-        .join("g")
-        .attr("class", "node-g")
-        .attr(
-            "transform",
-            (d) => `rotate(${(d.x / Math.PI) * 180 - 90}) translate(${d.y},0)`
+        .data(this.root.leaves(), d => d)
+        .join((enter) => enter
+            .append("g")
+            .attr("class", "node-g")
+            .attr("transform", (d) => `rotate(${(d.x / Math.PI) * 180 - 90}) translate(${d.y},0)`)
+            .append("text")
+            .attr("class", "node-text")
+            .attr("id", d => "node" + `${d.data.id}`)
+            .style("font-family", "Gotham")
+            .attr("stroke", this.app.props.nodeColor)
+            .style("cursor", "pointer")
+            .style("pointer-events", "click")
+            .attr("dy", "0.31em")
+            .attr("x", (d) => (d.x < Math.PI ? 6 : -6))
+            .attr("text-anchor", (d) => (d.x < Math.PI ? "start" : "end"))
+            .attr("transform", (d) => (d.x >= Math.PI ? "rotate(180)" : null))
+            .text(function (d) { return _this.excerpt(d.data.text) })
+            .each(function (d) {
+                d.text = this;
+                d.group = d.data.group;
+            })
+            .on("click", callNodeClick)
+            .on("mouseover", callNodeOver)
+            .on("mouseout", callNodeOut)
         )
-        .append("text")
-        .attr("class", "node-text")
-        .attr("id", d => "node" + `${d.data.id}`)
-        .style("font-family", "Gotham")
-        .attr("stroke", props.nodeColor)
-        .style("cursor", "pointer")
-        .style("pointer-events", "click")
-        .attr("dy", "0.31em")
-        .attr("x", (d) => (d.x < Math.PI ? 6 : -6))
-        .attr("text-anchor", (d) => (d.x < Math.PI ? "start" : "end"))
-        .attr("transform", (d) => (d.x >= Math.PI ? "rotate(180)" : null))
-        .text((d) => excerpt(d.data.text))
-        .each(function (d) {
-            d.text = this;
-            d.group = d.data.group;
-        })
-        .on("click", nodeClicked)
-        .on("mouseover", nodeOvered)
-        .on("mouseout", nodeOuted);
 
-    const link = layerLinks
+    function callNodeClick(event, d) {
+        _this.nodeClicked(this, event, d)
+    }
+
+    function callNodeOver(event, d) {
+        _this.nodeOvered(this, event, d)
+    }
+
+    function callNodeOut(event, d) {
+        _this.nodeOuted(this, event, d)
+    }
+}
+
+EdgeBundling.prototype.nodeOvered = function (that, event, d) {
+    const _this = this
+    _this.link.style("mix-blend-mode", null);
+    d3.select(that).attr("font-weight", "bold")
+        .attr("font-size", _this.app.props.nodeFontSizeBold)
+        .text(_this.excerptBold(d.data.text))
+
+    let pairedNodes = d.outgoing.concat(d.incoming).filter(function (k) {
+        return _this.dimensionAll
+            ? k.similarity_dimension === "all"
+            : k.similarity_dimension !== "all";
+    });
+
+
+    d3.selectAll(
+        pairedNodes.map((k) => {
+            return k.path;
+        })
+    )
+        .attr("stroke-width", _this.app.props.linkWidthHighlight)
+        .attr("stroke", (k) => {
+            return _this.dimensions.includes(k.similarity_dimension)
+                ? _this.darken(_this.linkColors(k.similarity_dimension))
+                : _this.darken(_this.app.props.linkBaseColor);
+        })
+        .raise();
+
+    const targetText = new Map();
+
+    d3.selectAll(
+        pairedNodes.map((k) => {
+            const [i, o] = k;
+            const selectedId = i.data.id === d.data.id ? o.data.id : i.data.id;
+            targetText.set(selectedId, {
+                similarity_dimension: k.similarity_dimension,
+                similarity: k.similarity,
+            });
+            return i.data.id === d.data.id ? o.text : i.text;
+        })
+    )
+        .attr("font-weight", "bold")
+        .attr("fill", (k) => {
+            const val = targetText.get(k.data.id).similarity_dimension;
+            return _this.dimensions.includes(val) ? _this.linkColors(val) : _this.app.props.nodeColor();
+        });
+}
+
+EdgeBundling.prototype.nodeOuted = function (that, event, d) {
+    const _this = this
+    const pairedNodes = d.outgoing.concat(d.incoming);
+
+    _this.link.style("mix-blend-mode", null);
+    d3.select(that).attr("font-weight", null)
+        .attr("fill", _this.app.props.nodeColor)
+        .attr("font-size", _this.app.props.nodeFontSize)
+        .text(_this.excerpt(d.data.text));
+    d3.selectAll(pairedNodes.map((d) => d.path))
+        .attr("stroke", (d) => {
+            return _this.dimensions.includes(d.similarity_dimension)
+                ? _this.linkColors(d.similarity_dimension)
+                : _this.app.props.linkBaseColor;
+        })
+        .attr("stroke-width", _this.app.props.linkWidth);
+    d3.selectAll(
+        pairedNodes.map(([i, o]) => (i.data.id === d.data.id ? o.text : i.text))
+    )
+        .attr("fill", _this.app.props.nodeColor)
+        .attr("font-weight", null);
+
+}
+
+EdgeBundling.prototype.nodeClicked = function (that, event, d) {
+    const _this = this
+    const pairedNodes = d.outgoing.concat(d.incoming);
+    const targetText = new Map();
+
+    const targets = pairedNodes.map((k) => {
+        const [i, o] = k;
+        const selected = i.data.id === d.data.id ? o.data : i.data;
+        targetText.set(k.similarity_dimension + selected.id, {
+            similarity_dimension: k.similarity_dimension,
+            similarity: k.similarity,
+        });
+        return i.data.id === d.data.id
+            ? { node: o, group: k.similarity_dimension }
+            : { node: i, group: k.similarity_dimension };
+    });
+
+    d3.select("#tooltip").style("visibility", "visible").html(`
+        <h4 class="tooltip-title">${d.data.group}</h4>
+        <p class="tooltip-text"><a class="tooltip-url" href="${d.data.group_url
+        }" target="_blank">${d.data.text}</a></p>
+        <h4>VS</h4>
+        <ul class="tooltip-list">
+          ${targets
+            .sort((a, b) => {
+                const la = targetText.get(a.group + a.node.data.id);
+                const lb = targetText.get(b.group + b.node.data.id);
+                return lb.similarity - la.similarity;
+            })
+            .map((k) => {
+                const val = targetText.get(k.group + k.node.data.id);
+                const data = k.node.data;
+                return `
+              <li >
+                <a class="tooltip-url"
+                   href="${data.group_url}" 
+                   target="_blank">
+                  <div class="tooltip-list-element">
+                    <div style="background-color:${_this.linkColors(
+                    val.similarity_dimension
+                )};">
+                      <p style="color:white;">${val.similarity}%</p>
+                    </div>
+                    <p><span class="tooltip-element-title"><strong>${data.group}</strong></span><br>
+                        <span class="tooltip-list-element-text">${data.text
+                        .split(" ")
+                        .slice(0, 5)
+                        .join(" ")}...</span>
+                    </p>
+                  </div>
+                </a>
+              </li>
+              `;
+            })
+            .join("")}
+        </ul>
+      `);
+
+    this.tooltipPosition(event);
+}
+
+EdgeBundling.prototype.addLink = function () {
+    const _this = this
+    this.link = this.layerLinks
         .style("pointer-events", "none")
-        .attr("stroke", props.linkBaseColor)
-        .attr("stroke-width", props.linkWidth)
+        .attr("stroke", this.app.props.linkBaseColor)
+        .attr("stroke-width", this.app.props.linkWidth)
         .attr("fill", "none")
         .selectAll("path")
-        .data(root.leaves().flatMap((leaf) => leaf.outgoing))
-        .join("path")
-        .attr("d", ([i, o]) => {
-            return line(i.path(o));
-        })
-        .each(function (d) {
-            this.similarity = d.similarity;
-            this.similarity_dimension = d.similarity_dimension;
-            d.path = this;
-        })
-        .attr("opacity", function (d) {
-            return this.similarity / 100;
-        });
+        .data(this.root.leaves().flatMap((leaf) => leaf.outgoing), d => d)
+        .join(
+            (enter) => enter.append("path")
+                .attr("d", ([i, o]) => {
+                    return _this.line(i.path(o));
+                })
+                .each(function (d) {
+                    this.similarity = d.similarity;
+                    this.similarity_dimension = d.similarity_dimension;
+                    d.path = this;
+                })
+                .attr("opacity", function (d) {
+                    return this.similarity / 100;
+                })
+        )
+}
 
-    for (const leaves of root.children) {
+
+EdgeBundling.prototype.addGroupLabel = function () {
+    const _this = this
+    for (const leaves of this.root.children) {
         const childrensX = leaves.children.map((c) => c.x);
         leaves.groupName = leaves.data.groupName;
         leaves.arcX = {
@@ -209,58 +444,67 @@ const EdgeBundling = function (app) {
         };
     }
 
-    const groupG = layerGroupLabel
+    d3.selectAll(".group-g").remove()
+
+    this.groupG = this.layerGroupLabel
         .selectAll("g")
-        .data(root.children.map(d => {
+
+        .data(this.root.children.map(d => {
             const obj = d.arcX
             obj.groupName = d.groupName
             return obj
         }))
+        .join("g")
+        .attr("class", "group-g")
 
-    const groupLabelLines = groupG
-        .join("path")
+    this.groupLabelLines = this.groupG
+        .append("path")
         .style("cursor", "pointer")
         .attr("id", (d) => ("group-label" + d.groupName).replace(/\s/g, ""))
         .attr("class", "group-label")
-        .attr("stroke", props.groupLinesColor)
+        .attr("stroke", this.app.props.groupLinesColor)
         .attr("fill", "none")
-        .attr("opacity", props.groupLabelOpacity)
+        .attr("opacity", this.app.props.groupLabelOpacity)
         .attr("d", (d) => {
             const radian = d.start + (d.end - d.start) / 2
-            return drawLabelLines(radian, d.start, d.end, d.groupName)
+            return _this.drawLabelLines(radian, d.start, d.end, d.groupName)
         })
 
-    const groupLabelArc = groupG
-        .join("path")
+    this.groupLabelArc = this.groupG
+        .append("path")
         .attr("id", (d) => ("arc" + d.groupName).replace(/\s/g, ""))
         .attr("fill", (d, i) => {
-            return i === 0 ? linkColors(d.similarity_dimension) : props.groupLinesColor
+            return i === 0 ? _this.linkColors(d.similarity_dimension) : _this.app.props.groupLinesColor
         })
         .attr("opacity", (d, i) => {
-            return i === 0 ? 1 : props.groupLabelOpacity
+            return i === 0 ? 1 : _this.app.props.groupLabelOpacity
         })
-        .call(drawLabelArc)
+        .call(callDrawLabelArc)
 
-    const groupLabelBg = groupG
-        .join("path")
-        .attr("fill", props.bgColor)
+    function callDrawLabelArc(g) {
+        _this.drawLabelArc(g)
+    }
+
+    this.groupLabelBg = this.groupG
+        .append("path")
+        .attr("fill", this.app.props.bgColor)
         .attr("stroke", "none")
         .attr("d", (d) => {
             const radian = d.start + (d.end - d.start) / 2
-            return drawLabelBg(radian, d.start, d.end, d.groupName)
+            return _this.drawLabelBg(radian, d.start, d.end, d.groupName)
         })
 
-    const groupText = groupG
-        .join("text")
+    this.groupText = this.groupG
+        .append("text")
         // .style("pointer-events", "none")
         .style("font-family", "Gotham")
         .attr("rotate", (d) =>
             (d.start + (d.end - d.start) / 2) > Math.PI ? "180" : "0")
 
-    const groupTextPath = groupText
+    this.groupTextPath = this.groupText
         .append("textPath")
         .attr("xlink:href", (d) => ("#group-label" + d.groupName).replace(/\s/g, ""))
-        .style("font-size", props.groupLabelSize)
+        .style("font-size", this.app.props.groupLabelSize)
         .style("text-anchor", "end")
         .style("alignment-baseline", (d) => "middle")
         .attr("fill", "white")
@@ -268,74 +512,56 @@ const EdgeBundling = function (app) {
             ? d.groupName.split("").reverse().join("")
             : d.groupName)
         .attr("startOffset", "100%")
+}
 
-    const enableSoundNotice = d3.select(".toggle-sound-notice")
-        .style("background-color", props.groupLinesColor)
-        .style("color", props.bgColor)
+EdgeBundling.prototype.addZoomEvent = function () {
+    const _this = this
+    const throttled = _.throttle(zoomed, 50)
+    const zoom =
+        d3
+            .zoom()
+            .extent([
+                [0, 0],
+                [this.app.props.windowWidth, this.app.props.windowHeight],
+            ])
+            .scaleExtent([0, 20])
+            .on("zoom", throttled)
 
+    let zoomedElement = this.layerBg.call(zoom);
 
-
-
-    addZoom()
-
-    function addZoom() {
-        const throttled = _.throttle(zoomed, 50)
-        const zoom =
-            d3
-                .zoom()
-                .extent([
-                    [0, 0],
-                    [props.windowWidth, props.windowHeight],
-                ])
-                .scaleExtent([0, 20])
-                .on("zoom", throttled)
-
-        let zoomedElement = layerBg.call(zoom);
-
-        d3.select("#toggle-center-button").on('click', function () {
-            zoomedElement.transition()
-                .duration(750).call(zoom.transform, d3.zoomIdentity);
-        })
-
-        function zoomed({ transform }) {
-            // console.log("oi")
-            layerChart
-                .attr(
-                    "transform",
-                    `translate(${transform.x},
-           ${transform.y}) 
-                  scale(${transform.k}) `
-                );
-        }
-    }
-
-    addWheel()
-    function addWheel() {
-        const throttled = _.throttle(wheeled, 10)
-        layerChart.call(
-            d3.zoom()
-                .extent([
-                    [0, 0],
-                    [props.windowWidth, props.windowHeight],
-                ])
-                .scaleExtent([0, Infinity])
-                .on("zoom", throttled)
-        )
-    }
-
-    const audioPromise = document.getElementById("audio-wheel")
-
-    d3.select("#audio-wheel-button").on("click", () => {
-        audioPromise.currentTime = 0
-        audioPromise.play()
+    d3.select("#toggle-center-button").on('click', function () {
+        zoomedElement.transition()
+            .duration(750).call(zoom.transform, d3.zoomIdentity);
     })
 
+    function zoomed({ transform }) {
+        _this.layerChart
+            .attr(
+                "transform",
+                `translate(${transform.x},
+           ${transform.y}) 
+                  scale(${transform.k}) `
+            );
+    }
+}
+
+
+EdgeBundling.prototype.addWheelEvent = function () {
+    const _this = this
+    const throttled = _.throttle(wheeled, 10)
+    this.layerChart.call(
+        d3.zoom()
+            .extent([
+                [0, 0],
+                [_this.app.props.windowWidth, _this.app.props.windowHeight],
+            ])
+            .scaleExtent([0, Infinity])
+            .on("zoom", throttled)
+    )
 
     function wheeled({ transform, sourceEvent }) {
-        // const nodeRad = props.nodeFontSize / radius
-        // const rotationY = Math.abs(Math.floor(sourceEvent.wheelDeltaY / 120))
-
-        // console.log(sourceEvent.deltaY)
+        const nodeRad = _this.app.props.nodeFontSize / _this.radius
+        const rotationY = Math.abs(Math.floor(sourceEvent.wheelDeltaY / 120))
 
         rotateWheel()
 
@@ -343,38 +569,38 @@ const EdgeBundling = function (app) {
             const e = sourceEvent.type == "mousemove" ? sourceEvent.movementY :
                 sourceEvent.type == "wheel" ? sourceEvent.deltaY : 0
 
-            const assumedSegment = ((root.leaves().length + root.children.length)) * 2 + 1
+            const assumedSegment = ((_this.root.leaves().length + _this.root.children.length)) * 2 + 1
 
-            deltaRad = e > 0 ? deltaRad + 2 * Math.PI / assumedSegment : deltaRad - 2 * Math.PI / assumedSegment
+            _this.deltaRad = e > 0 ? _this.deltaRad + 2 * Math.PI / assumedSegment : _this.deltaRad - 2 * Math.PI / assumedSegment
 
-            layerLinks.attr("transform", (d) => `rotate(${((deltaRad) / Math.PI) * 180}) `)
+            _this.layerLinks.attr("transform", (d) => `rotate(${((_this.deltaRad) / Math.PI) * 180}) `)
 
-            layerNodes.attr("transform", (d) => `rotate(${((deltaRad) / Math.PI) * 180}) `)
+            _this.layerNodes.attr("transform", (d) => `rotate(${((_this.deltaRad) / Math.PI) * 180}) `)
 
-            node
-                .attr("x", (d) => (Math.sin(d.x + deltaRad) > Math.sin(Math.PI) ? 6 : -6))
-                .attr("text-anchor", (d) => (Math.sin(d.x + deltaRad) > Math.sin(Math.PI) ? "start" : "end"))
-                .attr("transform", (d) => (Math.sin(d.x + deltaRad) > Math.sin(Math.PI) ? null : "rotate(180)"))
+            _this.node
+                .attr("x", (d) => (Math.sin(d.x + _this.deltaRad) > Math.sin(Math.PI) ? 6 : -6))
+                .attr("text-anchor", (d) => (Math.sin(d.x + _this.deltaRad) > Math.sin(Math.PI) ? "start" : "end"))
+                .attr("transform", (d) => (Math.sin(d.x + _this.deltaRad) > Math.sin(Math.PI) ? null : "rotate(180)"))
 
-            groupLabelLines.attr("d", (d, i) => {
-                return drawLabelLines(newRad(deltaRad, d), d.start, d.end, d.groupName)
+            _this.groupLabelLines.attr("d", (d, i) => {
+                return _this.drawLabelLines(newRad(_this.deltaRad, d), d.start, d.end, d.groupName)
             })
 
-            groupLabelArc.attr("transform", () => `rotate(${deltaRad / (Math.PI * 2) * 360})`)
+            _this.groupLabelArc.attr("transform", () => `rotate(${_this.deltaRad / (Math.PI * 2) * 360})`)
 
-            groupLabelBg
+            _this.groupLabelBg
                 .attr("d", (d) => {
-                    return drawLabelBg(newRad(deltaRad, d), d.start, d.end, d.groupName)
+                    return _this.drawLabelBg(newRad(_this.deltaRad, d), d.start, d.end, d.groupName)
                 })
 
-            groupText
+            _this.groupText
                 .attr("rotate", (d) => {
-                    return newRad(deltaRad, d) > Math.PI ? "180" : "0"
+                    return newRad(_this.deltaRad, d) > Math.PI ? "180" : "0"
                 })
 
-            groupTextPath
+            _this.groupTextPath
                 .text((d) => {
-                    return newRad(deltaRad, d) > Math.PI
+                    return newRad(_this.deltaRad, d) > Math.PI
                         ? d.groupName.split("").reverse().join("")
                         : d.groupName
                 })
@@ -382,27 +608,27 @@ const EdgeBundling = function (app) {
 
             // Fake click and hover event triggering tooltip on wheel
 
-            const nodeFocus = root.leaves()
+            const nodeFocus = _this.root.leaves()
                 .filter(d => {
-                    let radianFocus = (d.x + deltaRad) % (Math.PI * 2)
+                    let radianFocus = (d.x + _this.deltaRad) % (Math.PI * 2)
                     radianFocus = radianFocus < 0 ? 2 * Math.PI + radianFocus : radianFocus
-                    return radianFocus > Math.PI / 2 - props.nodeFontSize / radius &&
-                        radianFocus < Math.PI / 2 + props.nodeFontSize / radius
+                    return radianFocus > Math.PI / 2 - _this.app.props.nodeFontSize / _this.radius &&
+                        radianFocus < Math.PI / 2 + _this.app.props.nodeFontSize / _this.radius
                 })[0]
 
-            if (nodeFocus !== undefined) {
-                const fakeClickEvent = { pageX: sourceEvent.clientX + props.textEstimateL * 2 + 100, pageY: controlBoxHeight + 30 }
-                nodeClicked(fakeClickEvent, nodeFocus)
+            // if (nodeFocus !== undefined) {
+            //     const fakeClickEvent = { pageX: sourceEvent.clientX + _this.props.textEstimateL * 2 + 100, pageY: controlBoxHeight + 30 }
+            //     _this.nodeClicked(fakeClickEvent, nodeFocus)
 
-                $(".node-text").d3Mouseout()
-                $(`#node${nodeFocus.data.id}`).d3Mouseover()
+            //     $(".node-text").d3Mouseout()
+            //     $(`#node${nodeFocus.data.id}`).d3Mouseover()
 
-                // if (prevWheeled !== nodeFocus.data.id) {
-                //     $(`#audio-wheel-button`).d3Mouseclick()
-                //     prevWheeled = nodeFocus.data.id
-                // }
+            //     // if (prevWheeled !== nodeFocus.data.id) {
+            //     //     $(`#audio-wheel-button`).d3Mouseclick()
+            //     //     prevWheeled = nodeFocus.data.id
+            //     // }
 
-            }
+            // }
         }
 
         // Processing rotation value
@@ -413,8 +639,30 @@ const EdgeBundling = function (app) {
             return radian
         }
     }
+}
 
-    const tooltip = d3
+EdgeBundling.prototype.addAudio = function () {
+    const _this = this
+    this.enableSoundNotice = d3.select(".toggle-sound-notice")
+        .style("background-color", this.app.props.groupLinesColor)
+        .style("color", this.app.props.bgColor)
+
+    this.app.svgEdgebundling.on("click", () => {
+        _this.enableSoundNotice.style("display", "none")
+    })
+
+    const audioPromise = document.getElementById("audio-wheel")
+
+    d3.select("#audio-wheel-button").on("click", () => {
+        audioPromise.currentTime = 0
+        audioPromise.play()
+    })
+
+}
+
+
+EdgeBundling.prototype.addTooltip = function () {
+    this.tooltip = d3
         .select("body")
         .append("div")
         .attr("id", "tooltip")
@@ -422,424 +670,183 @@ const EdgeBundling = function (app) {
         .style("position", "absolute")
         .style("z-index", "10")
         .style("visibility", "hidden");
-
-    init();
-
-    function init() {
-        dimensions = ["all"];
-        dimensionAll = !dimensionAll;
-        d3.select(`#dimension-all`).classed("active", dimensionAll ? true : false);
-        handleDarkMode();
-        inputsUpdate();
-        updateLink();
-    }
-
-    function handleDarkMode() {
-        const toggleDark = d3.select("#toggle-dark");
-        const localStorage = window.localStorage;
+}
 
 
-        if (localStorage.edgeBundlingDarkMode) {
-            const valString = localStorage.edgeBundlingDarkMode
-            if (valString === "true") {
-                darkMode = true
-            } else {
-                darkMode = false
-            }
-        }
+EdgeBundling.prototype.drawLabelLines = function (deg, start, end, groupName) {
+    const outer = this.radius + this.app.props.textEstimateL * 1.2 + this.app.props.arcWidth
+    const assumedLeaves = this.root.leaves().length + this.root.children.length
+    let factor = ((deg / (Math.PI * 2) * assumedLeaves) % (assumedLeaves / 2)) - (assumedLeaves / 4)
+    factor = deg >= Math.PI ? factor : -factor
+    let groupToNodeRatio = (this.root.children.length / this.root.leaves().length) * 0.5
 
-        toggleDark.node().checked = darkMode;
-        setColorMode();
+    const y2 = -factor * this.app.props.nodeFontSize * (1.5 + groupToNodeRatio)
+    let textLen =
+        groupName.length * this.app.props.groupLabelSize * this.app.props.groupLabelRatio;
+    textLen = deg >= Math.PI ? -textLen : textLen
 
-        toggleDark.on("click", function (e) {
-            darkMode = this.checked;
-            window.localStorage.edgeBundlingDarkMode = darkMode;
-            setColorMode();
-        });
-    }
+    return d3.line()([
+        // [Math.sin(deg)*radius,-Math.cos(deg)*radius],
+        [Math.sin(deg) * outer, -Math.cos(deg) * outer],
+        [Math.sin(deg) * (outer + 100), y2],
+        [Math.sin(deg) * (outer + 100) + textLen * 1.3, y2],
+    ])
+}
 
-    function setColorMode() {
-        bg.attr("fill", props.bgColor);
-        node.attr("fill", props.nodeColor);
-        tooltip
-            .style("background-color", props.tooltipBg)
-            .style("color", props.tooltipBg);
+EdgeBundling.prototype.drawLabelBg = function (deg, start, end, groupName) {
+    const outer = this.radius + this.app.props.textEstimateL
+    const assumedLeaves = this.root.leaves().length + this.root.children.length
+    let factor = ((deg / (Math.PI * 2) * assumedLeaves) % (assumedLeaves / 2)) - (assumedLeaves / 4)
+    factor = deg > Math.PI ? factor : -factor
 
-        d3.select(".document-counts")
-            .style("background-color", "transparent")
-            .style("color", props.controlBoxColor);
+    let groupToNodeRatio = (this.root.children.length / this.root.leaves().length) * 0.5
 
-        d3.selectAll(".inputs-bg").style("background-color", "transparent");
-        d3.selectAll(".inputs-bg h4").style("color", props.controlBoxColor);
-        d3.selectAll(".group-by")
-            .style("background-color", props.controlBoxColor2)
-            .style("border", "none");
-        d3.selectAll(".similarity-dimension")
-            .style("background-color", props.controlBoxColor2)
-            .style("border", "none");
+    const y2 = -factor * this.app.props.nodeFontSize * (1.5 + groupToNodeRatio)
+    let textLen =
+        groupName.length * this.app.props.groupLabelSize * this.app.props.groupLabelRatio;
+    textLen = deg > Math.PI ? -textLen : textLen
 
-        wheel.attr("fill", props.bgColor)
+    const halfFont = this.app.props.groupLabelSize / 2
 
-        wheelNeedle.attr("fill", props.groupLinesColor)
+    return d3.line()([
+        [Math.sin(deg) * (outer + 100) + textLen * 0.05, y2 - halfFont],
+        [Math.sin(deg) * (outer + 100) + textLen * 0.05, y2 + halfFont],
+        [Math.sin(deg) * (outer + 100) + textLen * 1.3, y2 + halfFont],
+        [Math.sin(deg) * (outer + 100) + textLen * 1.3, y2 - halfFont],
+    ])
+}
 
-        groupLabelBg.attr("fill", props.bgColor)
-
-        groupLabelLines.attr("stroke", props.groupLinesColor)
-
-        groupTextPath.attr("fill", props.groupLinesColor)
-
-        groupLabelArc
-            .attr("fill", props.groupLinesColor)
-
-        enableSoundNotice
-            .style("background-color", props.groupLinesColor)
-            .style("color", props.bgColor)
-
-    }
-
-    // Functionalities
-    function handleInput(event, k) {
-        d3.selectAll(".dimension").classed("active", false);
-        d3.select(`#dimension-${k}`).classed("active", true);
-
-        if (k === "all") {
-            dimensionAll = !dimensionAll ? !dimensionAll : dimensionAll;
-            dimensions = dimensionAll ? ["all"] : [];
-            d3.selectAll(".dimension").classed("active", false);
-            d3.select(`#dimension-all`).classed(
-                "active",
-                dimensionAll ? true : false
-            );
-        } else {
-            if (dimensionAll) {
-                dimensionAll = !dimensionAll;
-                dimensions = [];
-                d3.select(`#dimension-all`).classed("active", false);
-            }
-            setDimensions(k);
-            if (dimensions.length === 0) {
-                dimensions = ["all"];
-                dimensionAll = !dimensionAll;
-                d3.select(`#dimension-all`).classed("active", true);
-                d3.select(`#dimension-all`).classed(
-                    "active",
-                    dimensionAll ? true : false
-                );
-            }
-        }
-        updateLink();
-        //setDimensions(k);
-        inputsUpdate();
-    }
-
-    function inputsUpdate() {
-        inputsDimension.style("background-color", (k) => {
-            if (k === "all") {
-                return dimensionAll ? linkColors(k) : props.inputBgColor;
-            } else {
-                return dimensions.includes(k) ? linkColors(k) : props.inputBgColor;
-            }
-        });
-    }
-
-    function updateLink() {
-        link
-            .attr("stroke", function (d) {
-                return dimensions.includes(d.similarity_dimension)
-                    ? linkColors(d.similarity_dimension)
-                    : props.linkBaseColor;
+EdgeBundling.prototype.drawLabelArc = function (g) {
+    const _this = this
+    const radNode = this.app.props.nodeFontSize / (this.radius + this.app.props.textEstimateL) / 2
+    const arc =
+        d3.arc()
+            .innerRadius(this.radius + this.app.props.textEstimateL * 1.2)
+            .outerRadius((d, i) => {
+                const extension = i === 0 ? 2 : 0
+                return _this.radius + _this.app.props.textEstimateL * 1.2 + _this.app.props.arcWidth + extension
             })
-            .attr("opacity", function (d) {
-                return dimensions.includes(d.similarity_dimension)
-                    ? (d.similarity / 100).toFixed(2)
-                    : 0;
-            });
-    }
-
-
-    function excerpt(text) {
-        text = text.split(" ").slice(0, 5).join(" ")
-        const textLength = text.length * props.nodeFontSize
-        return textLength > 400 ? text.slice(0, Math.floor(400 / props.nodeFontSize)) : text;
-    }
-
-    function excerptBold(text) {
-        text = text.split(" ").slice(0, 5).join(" ")
-        const textLength = text.length * props.nodeFontSizeBold
-        return textLength > 400 ? text.slice(0, Math.floor(400 * 0.9 / props.nodeFontSizeBold)) : text;
-    }
-
-    function nodeOvered(event, d) {
-        link.style("mix-blend-mode", null);
-        d3.select(this).attr("font-weight", "bold")
-            .attr("font-size", props.nodeFontSizeBold)
-            .text(excerptBold(d.data.text))
-
-        let pairedNodes = d.outgoing.concat(d.incoming).filter((k) => {
-            return dimensionAll
-                ? k.similarity_dimension === "all"
-                : k.similarity_dimension !== "all";
-        });
-
-
-        d3.selectAll(
-            pairedNodes.map((k) => {
-                return k.path;
+            .startAngle((d) => {
+                const start = d.end - d.start == 0 ? d.start - radNode : d.start
+                const end = d.end - d.start == 0 ? d.end + radNode : d.end
+                return start > Math.PI / 2 && start < Math.PI * 1.5 ? end : start;
             })
-        )
-            .attr("stroke-width", props.linkWidthHighlight)
-            .attr("stroke", (k) => {
-                return dimensions.includes(k.similarity_dimension)
-                    ? darken(linkColors(k.similarity_dimension))
-                    : darken(props.linkBaseColor);
-            })
-            .raise();
-
-        const targetText = new Map();
-
-        d3.selectAll(
-            pairedNodes.map((k) => {
-                const [i, o] = k;
-                const selectedId = i.data.id === d.data.id ? o.data.id : i.data.id;
-                targetText.set(selectedId, {
-                    similarity_dimension: k.similarity_dimension,
-                    similarity: k.similarity,
-                });
-                return i.data.id === d.data.id ? o.text : i.text;
-            })
-        )
-            .attr("font-weight", "bold")
-            .attr("fill", (k) => {
-                const val = targetText.get(k.data.id).similarity_dimension;
-                return dimensions.includes(val) ? linkColors(val) : props.nodeColor();
+            .endAngle((d) => {
+                const start = d.end - d.start == 0 ? d.start - radNode : d.start
+                const end = d.end - d.start == 0 ? d.end + radNode : d.end
+                return start > Math.PI / 2 && start < Math.PI * 1.5 ? start : end;
             });
 
-
-        // const pairedGroups = pairedNodes.map(k => {
-        //   let g = ""
-        //   if (k[0].group !== d.group) {
-        //     g = k[0].group
-        //   } else if (k[1].group !== d.group) {
-        //     g = k[1].group
-        //   }
-        //   return {
-        //     group: g,
-        //     similarity_dimension: k.similarity_dimension
-        //   }
-        // })
+    g.attr("d", arc)
+}
 
 
-        // groupLabelArc.attr("fill", k => {
-        //   const targetIndex = pairedGroups.map(p => p.group).indexOf(k.groupName)
-        //   return targetIndex > -1 ?
-        //     linkColors(pairedGroups[targetIndex].similarity_dimension) : props.groupLinesColor()
-        // }).attr("opacity", k => {
-        //   return k.groupName === d.group ? 1 : props.groupLabelOpacity
-        // })
-    }
+EdgeBundling.prototype.setColor = function () {
+    const _this = this
 
-    function nodeOuted(event, d) {
-        const pairedNodes = d.outgoing.concat(d.incoming);
+    this.bg.attr("fill", this.app.props.bgColor);
+    this.node.attr("fill", this.app.props.nodeColor);
+    this.tooltip
+        .style("background-color", this.app.props.tooltipBg)
+        .style("color", this.app.props.tooltipBg);
 
-        link.style("mix-blend-mode", null);
-        d3.select(this).attr("font-weight", null)
-            .attr("fill", props.nodeColor)
-            .attr("font-size", props.nodeFontSize)
-            .text(excerpt(d.data.text));
-        d3.selectAll(pairedNodes.map((d) => d.path))
-            .attr("stroke", (d) => {
-                return dimensions.includes(d.similarity_dimension)
-                    ? linkColors(d.similarity_dimension)
-                    : props.linkBaseColor;
-            })
-            .attr("stroke-width", props.linkWidth);
-        d3.selectAll(
-            pairedNodes.map(([i, o]) => (i.data.id === d.data.id ? o.text : i.text))
-        )
-            .attr("fill", props.nodeColor)
-            .attr("font-weight", null);
+    d3.select(".document-counts")
+        .style("background-color", "transparent")
+        .style("color", this.app.props.controlBoxColor);
 
-    }
+    d3.selectAll(".inputs-bg").style("background-color", "transparent");
+    d3.selectAll(".inputs-bg h4").style("color", this.app.props.controlBoxColor);
+    d3.selectAll(".group-by")
+        .style("background-color", this.app.props.controlBoxColor2)
+        .style("border", "none");
+    d3.selectAll(".similarity-dimension")
+        .style("background-color", this.app.props.controlBoxColor2)
+        .style("border", "none");
 
-    function nodeClicked(event, d) {
-        const pairedNodes = d.outgoing.concat(d.incoming);
-        const targetText = new Map();
+    this.wheel.attr("fill", this.app.props.bgColor)
 
-        const targets = pairedNodes.map((k) => {
-            const [i, o] = k;
-            const selected = i.data.id === d.data.id ? o.data : i.data;
-            targetText.set(k.similarity_dimension + selected.id, {
-                similarity_dimension: k.similarity_dimension,
-                similarity: k.similarity,
-            });
-            return i.data.id === d.data.id
-                ? { node: o, group: k.similarity_dimension }
-                : { node: i, group: k.similarity_dimension };
+    this.wheelNeedle.attr("fill", this.app.props.groupLinesColor)
+
+    this.groupLabelBg.attr("fill", this.app.props.bgColor)
+
+    this.groupLabelLines.attr("stroke", this.app.props.groupLinesColor)
+
+    this.groupTextPath.attr("fill", this.app.props.groupLinesColor)
+
+    this.groupLabelArc
+        .attr("fill", this.app.props.groupLinesColor)
+
+    this.enableSoundNotice
+        .style("background-color", this.app.props.groupLinesColor)
+        .style("color", this.app.props.bgColor)
+}
+
+
+EdgeBundling.prototype.updateLink = function () {
+    const _this = this
+    this.link
+        .attr("stroke", function (d) {
+            return _this.dimensions.includes(d.similarity_dimension)
+                ? _this.linkColors(d.similarity_dimension)
+                : _this.app.props.linkBaseColor;
+        })
+        .attr("opacity", function (d) {
+            return _this.dimensions.includes(d.similarity_dimension)
+                ? (d.similarity / 100).toFixed(2)
+                : 0;
         });
+}
 
-        d3.select("#tooltip").style("visibility", "visible").html(`
-        <h4 class="tooltip-title">${d.data.group}</h4>
-        <p class="tooltip-text"><a class="tooltip-url" href="${d.data.group_url
-            }" target="_blank">${d.data.text}</a></p>
-        <h4>VS</h4>
-        <ul class="tooltip-list">
-          ${targets
-                .sort((a, b) => {
-                    const la = targetText.get(a.group + a.node.data.id);
-                    const lb = targetText.get(b.group + b.node.data.id);
-                    return lb.similarity - la.similarity;
-                })
-                .map((k) => {
-                    const val = targetText.get(k.group + k.node.data.id);
-                    const data = k.node.data;
-                    return `
-              <li >
-                <a class="tooltip-url"
-                   href="${data.group_url}" 
-                   target="_blank">
-                  <div class="tooltip-list-element">
-                    <div style="background-color:${linkColors(
-                        val.similarity_dimension
-                    )};">
-                      <p style="color:white;">${val.similarity}%</p>
-                    </div>
-                    <p><span class="tooltip-element-title"><strong>${data.group}</strong></span><br>
-                        <span class="tooltip-list-element-text">${data.text
-                            .split(" ")
-                            .slice(0, 5)
-                            .join(" ")}...</span>
-                    </p>
-                  </div>
-                </a>
-              </li>
-              `;
-                })
-                .join("")}
-        </ul>
-      `);
 
-        tooltipPosition(event);
+EdgeBundling.prototype.excerpt = function (text) {
+    text = text.split(" ").slice(0, 5).join(" ")
+    const textLength = text.length * this.app.props.nodeFontSize
+    return textLength > 400 ? text.slice(0, Math.floor(400 / this.app.props.nodeFontSize)) : text;
+}
+
+EdgeBundling.prototype.excerptBold = function (text) {
+    text = text.split(" ").slice(0, 5).join(" ")
+    const textLength = text.length * this.app.props.nodeFontSizeBold
+    return textLength > 400 ? text.slice(0, Math.floor(400 * 0.9 / this.app.props.nodeFontSizeBold)) : text;
+}
+
+
+
+EdgeBundling.prototype.tooltipPosition = function (event) {
+    let ttid = "#tooltip";
+    let xOffset = 10;
+    let yOffset = 10;
+    let toolTipW = $(ttid).width();
+    let toolTipeH = $(ttid).height();
+    let windowY = $(window).scrollTop();
+    let windowX = $(window).scrollLeft();
+    let curX = event.pageX;
+    let curY = event.pageY;
+
+    let ttleft =
+        curX < $(window).width() / 2
+            ? curX - toolTipW - xOffset * 3
+            : curX + xOffset;
+
+    if (ttleft < windowX + xOffset) {
+        ttleft = windowX + xOffset;
+    } else {
+        ttleft = curX - windowX - toolTipW;
     }
 
-    function transformInit(g) {
-        initTransform.k =
-            (props.windowHeight - controlBoxHeight) / 2 / (radius + props.textEstimateL);
-        initTransform.x = props.windowWidth / 2
-        initTransform.y = (radius + props.textEstimateL * 2) * initTransform.k
-        g.attr(
-            "transform",
-            `translate(${initTransform.x},${initTransform.y
-            }) scale(${initTransform.k})`
-        );
+    let tttop =
+        curY + toolTipeH + yOffset * 3 > $(window).height()
+            ? curY - toolTipeH - yOffset * 3
+            : curY + yOffset;
+
+    if (tttop < windowY + yOffset) {
+        tttop = curY + yOffset;
     }
 
-    function clickBg(event, d) {
-        $(".node-text").d3Mouseout()
-        d3.select("#tooltip").style("visibility", "hidden");
-    }
+    $(ttid)
+        .css("top", tttop + 20 + "px")
 
-    function drawLabelLines(deg, start, end, groupName) {
-        const outer = radius + props.textEstimateL * 1.2 + props.arcWidth
-        const assumedLeaves = root.leaves().length + root.children.length
-        let factor = ((deg / (Math.PI * 2) * assumedLeaves) % (assumedLeaves / 2)) - (assumedLeaves / 4)
-        factor = deg >= Math.PI ? factor : -factor
-        let groupToNodeRatio = (root.children.length / root.leaves().length) * 0.5
-
-        const y2 = -factor * props.nodeFontSize * (1.5 + groupToNodeRatio)
-        let textLen =
-            groupName.length * props.groupLabelSize * props.groupLabelRatio;
-        textLen = deg >= Math.PI ? -textLen : textLen
-
-        return d3.line()([
-            // [Math.sin(deg)*radius,-Math.cos(deg)*radius],
-            [Math.sin(deg) * outer, -Math.cos(deg) * outer],
-            [Math.sin(deg) * (outer + 100), y2],
-            [Math.sin(deg) * (outer + 100) + textLen * 1.3, y2],
-        ])
-    }
-
-    function drawLabelBg(deg, start, end, groupName) {
-        const outer = radius + props.textEstimateL
-        const assumedLeaves = root.leaves().length + root.children.length
-        let factor = ((deg / (Math.PI * 2) * assumedLeaves) % (assumedLeaves / 2)) - (assumedLeaves / 4)
-        factor = deg > Math.PI ? factor : -factor
-
-        let groupToNodeRatio = (root.children.length / root.leaves().length) * 0.5
-
-        const y2 = -factor * props.nodeFontSize * (1.5 + groupToNodeRatio)
-        let textLen =
-            groupName.length * props.groupLabelSize * props.groupLabelRatio;
-        textLen = deg > Math.PI ? -textLen : textLen
-
-        const halfFont = props.groupLabelSize / 2
-
-        return d3.line()([
-            [Math.sin(deg) * (outer + 100) + textLen * 0.05, y2 - halfFont],
-            [Math.sin(deg) * (outer + 100) + textLen * 0.05, y2 + halfFont],
-            [Math.sin(deg) * (outer + 100) + textLen * 1.3, y2 + halfFont],
-            [Math.sin(deg) * (outer + 100) + textLen * 1.3, y2 - halfFont],
-        ])
-    }
-
-    function drawLabelArc(g) {
-        const radNode = props.nodeFontSize / (radius + props.textEstimateL) / 2
-        const arc =
-            d3.arc()
-                .innerRadius(radius + props.textEstimateL * 1.2)
-                .outerRadius((d, i) => {
-                    const extension = i === 0 ? 2 : 0
-                    return radius + props.textEstimateL * 1.2 + props.arcWidth + extension
-                })
-                .startAngle((d) => {
-                    const start = d.end - d.start == 0 ? d.start - radNode : d.start
-                    const end = d.end - d.start == 0 ? d.end + radNode : d.end
-                    return start > Math.PI / 2 && start < Math.PI * 1.5 ? end : start;
-                })
-                .endAngle((d) => {
-                    const start = d.end - d.start == 0 ? d.start - radNode : d.start
-                    const end = d.end - d.start == 0 ? d.end + radNode : d.end
-                    return start > Math.PI / 2 && start < Math.PI * 1.5 ? start : end;
-                });
-
-        g.attr("d", arc)
-    }
-
-    function tooltipPosition(event) {
-        let ttid = "#tooltip";
-        let xOffset = 10;
-        let yOffset = 10;
-        let toolTipW = $(ttid).width();
-        let toolTipeH = $(ttid).height();
-        let windowY = $(window).scrollTop();
-        let windowX = $(window).scrollLeft();
-        let curX = event.pageX;
-        let curY = event.pageY;
-
-        let ttleft =
-            curX < $(window).width() / 2
-                ? curX - toolTipW - xOffset * 3
-                : curX + xOffset;
-
-        if (ttleft < windowX + xOffset) {
-            ttleft = windowX + xOffset;
-        } else {
-            ttleft = curX - windowX - toolTipW;
-        }
-
-        let tttop =
-            curY + toolTipeH + yOffset * 3 > $(window).height()
-                ? curY - toolTipeH - yOffset * 3
-                : curY + yOffset;
-
-        if (tttop < windowY + yOffset) {
-            tttop = curY + yOffset;
-        }
-
-        $(ttid)
-            .css("top", tttop + 20 + "px")
-
-            .css("left", ttleft + "px");
-    }
+        .css("left", ttleft + "px");
 }
 
 // Simulating mouse click event

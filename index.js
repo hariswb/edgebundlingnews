@@ -4,21 +4,30 @@ const App = function (rawData) {
   this.setDataRange()
   this.setDataTree()
 
+  this.setLayout()
+
   this.darkMode = true
 
   this.addSVGs()
 
-  const edgeBundling = new EdgeBundling(this);
+  this.edgeBundling = new EdgeBundling(this);
+  this.barChart = new BarChart(this)
 
-  const barChart = new BarChart(this)
+  this.update()
+
+  this.handleDarkMode()
+}
+
+App.prototype.update = function (params) {
+  this.setDataTree()
+  this.edgeBundling.render()
 }
 
 App.prototype.setDataTree = function () {
-  const prepared = prepareData(this.rawData.filter(d => d.similarity > 60));
-  console.log(prepared)
+  const _this = this
+  const prepared = prepareData(this.rawData.filter(d => d.similarity >= _this.dataRange.start && d.similarity <= _this.dataRange.end));
   this.treeData = prepared.tree
   this.similarityDimensions = prepared.similarityDimensions
-
 }
 
 App.prototype.addSVGs = function () {
@@ -58,46 +67,71 @@ App.prototype.setDataRollup = function () {
   )
 }
 
+App.prototype.handleDarkMode = function () {
+  const _this = this
+  const toggleDark = d3.select("#toggle-dark");
+  const localStorage = window.localStorage;
+
+  if (localStorage.edgeBundlingDarkMode) {
+    const valString = localStorage.edgeBundlingDarkMode
+    if (valString === "true") {
+      this.darkMode = true
+    } else {
+      this.darkMode = false
+    }
+  }
+
+  toggleDark.node().checked = this.darkMode;
+  this.updateLayout();
+
+  toggleDark.on("click", function (e) {
+    _this.darkMode = this.checked;
+    window.localStorage.edgeBundlingDarkMode = _this.darkMode;
+    _this.updateLayout();
+  });
+}
+
+App.prototype.updateLayout = function (params) {
+  this.edgeBundling.setColor()
+}
+
+App.prototype.setLayout = function () {
+  let _this = this
+  this.props = {
+    linkBaseColor: "#aaa",
+    linkWidth: 1,
+    linkWidthHighlight: 3,
+    nodeColor: () => (this.darkMode ? "#eee" : "#444"),
+    nodeFontSize: 10,
+    nodeFontSizeBold: 16,
+    nodeMargin: 2,
+    inputBgColor: "#ccc",
+    controlBoxBg: () => (this.darkMode ? "#666" : "#fff"),
+    controlBoxColor: () => (this.darkMode ? "#fff" : "#111"),
+    controlBoxColor2: () => (this.darkMode ? "#444" : "#eee"),
+    inputBgAll: "#444",
+    colorHighlight: "red",
+    windowHeight: window.innerHeight,
+    windowWidth: window.innerWidth,
+    arcWidth: 5,
+    arcMargin: 0,
+    bgColor: () => (this.darkMode ? "#222" : "#fff"),
+    groupLabelSize: 22,
+    groupLabelRatio: 0.45,
+    groupLinesColor: () => this.darkMode ? "#fff" : "#111",
+    groupLabelOpacity: 0.4,
+    tooltipBg: () => (this.darkMode ? "#ddd" : "#fff"),
+    textEstimateL: 200,
+  };
+
+}
+
 App.prototype.setDataRange = function () {
   this.dataRange = {
     start: d3.min(this.dataRolled.keys()),
     end: d3.max(this.dataRolled.keys())
   }
 }
-
-// App.prototype.prepareData = function () {
-//     let _this = this
-
-//     this.rawData = this.getUniquesBy(this.rawData, "url")
-
-//     this.rawData.forEach(function (node, i) {
-//         _this.keys.forEach((k) => {
-//             if (node[k] === null) {
-//                 _this.rawData[i][k] = "null";
-//             } else if (node[k] === undefined) {
-//                 _this.rawData[i][k] = "null";
-//             }
-//             _this.rawData[i]["type"] = "main";
-//         });
-
-//         const date = new Date(node.publish_date);
-//         _this.rawData[i].date_published = date;
-//         _this.rawData[i].date_string = date.toDateString();
-//     });
-
-//     this.dataRolled = d3.rollup(
-//         this.rawData,
-//         (v) => {
-//             const random_num = 1 + Math.random() * 2;
-//             return {
-//                 length: v.length,
-//                 closing_price: random_num.toFixed(2),
-//                 bundle: v,
-//             };
-//         },
-//         (d) => new Date(d.date_string)
-//     );
-// }
 
 d3.json("static/fed-strong-labor.json")
   .then(function (rawData) {
