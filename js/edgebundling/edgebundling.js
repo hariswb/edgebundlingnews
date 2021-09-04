@@ -29,8 +29,8 @@ EdgeBundling.prototype.setUp = function () {
         .map((d) => d.children.length)
         .reduce((sum, x) => sum + x);
 
-    this.radius =
-        ((this.nodesNumber + this.app.treeData.children.length) * (this.app.props.nodeFontSize + this.app.props.nodeMargin)) / (2 * Math.PI); // props.windowHeight / 2;
+
+    this.radius = this.getRadius()
 
     this.controlBoxHeight = d3.select(".control").node().getBoundingClientRect()
         .height;
@@ -38,7 +38,6 @@ EdgeBundling.prototype.setUp = function () {
     this.line = d3.lineRadial().curve(d3.curveBundle.beta(0.85))
         .radius((d) => d.y - this.app.props.arcWidth - this.app.props.arcMargin)
         .angle((d) => d.x);
-
 }
 
 
@@ -80,14 +79,23 @@ EdgeBundling.prototype.init = function () {
     this.addWheelEvent()
 }
 
+EdgeBundling.prototype.getRadius = function () {
+    const r = ((this.nodesNumber + this.app.treeData.children.length) * (this.app.props.nodeFontSize + this.app.props.nodeMargin)) / (2 * Math.PI);
+    return r > 300 ? r : 300
+
+
+}
+
 EdgeBundling.prototype.render = function () {
     this.nodesNumber = this.app.treeData.children
         .map((d) => d.children.length)
         .reduce((sum, x) => sum + x);
 
-    this.radius =
-        ((this.nodesNumber + this.app.treeData.children.length) * (this.app.props.nodeFontSize + this.app.props.nodeMargin)) / (2 * Math.PI); // props.windowHeight / 2;
+    this.radius = this.getRadius()
 
+
+
+    console.log(this.nodesNumber, this.radius)
     this.controlBoxHeight = d3.select(".control").node().getBoundingClientRect()
         .height;
 
@@ -569,7 +577,7 @@ EdgeBundling.prototype.addWheelEvent = function () {
             const e = sourceEvent.type == "mousemove" ? sourceEvent.movementY :
                 sourceEvent.type == "wheel" ? sourceEvent.deltaY : 0
 
-            const assumedSegment = ((_this.root.leaves().length + _this.root.children.length)) * 2 + 1
+            const assumedSegment = ((_this.root.leaves().length + _this.root.children.length)) * 2
 
             _this.deltaRad = e > 0 ? _this.deltaRad + 2 * Math.PI / assumedSegment : _this.deltaRad - 2 * Math.PI / assumedSegment
 
@@ -672,17 +680,31 @@ EdgeBundling.prototype.addTooltip = function () {
         .style("visibility", "hidden");
 }
 
+EdgeBundling.prototype.handleLabelHeight = function (params) {
+    let assumedLeaves = this.root.leaves().length + this.root.children.length
+    if (assumedLeaves < 200) {
+        assumedLeaves = 200
+    } else if (assumedLeaves < 300) {
+        assumedLeaves = 300
+    }
+    return assumedLeaves
+}
 
 EdgeBundling.prototype.drawLabelLines = function (deg, start, end, groupName) {
     const outer = this.radius + this.app.props.textEstimateL * 1.2 + this.app.props.arcWidth
-    const assumedLeaves = this.root.leaves().length + this.root.children.length
+
+    let assumedLeaves = this.handleLabelHeight() // Number of nodes
+
     let factor = ((deg / (Math.PI * 2) * assumedLeaves) % (assumedLeaves / 2)) - (assumedLeaves / 4)
     factor = deg >= Math.PI ? factor : -factor
+
     let groupToNodeRatio = (this.root.children.length / this.root.leaves().length) * 0.5
 
     const y2 = -factor * this.app.props.nodeFontSize * (1.5 + groupToNodeRatio)
+
     let textLen =
         groupName.length * this.app.props.groupLabelSize * this.app.props.groupLabelRatio;
+
     textLen = deg >= Math.PI ? -textLen : textLen
 
     return d3.line()([
@@ -695,7 +717,10 @@ EdgeBundling.prototype.drawLabelLines = function (deg, start, end, groupName) {
 
 EdgeBundling.prototype.drawLabelBg = function (deg, start, end, groupName) {
     const outer = this.radius + this.app.props.textEstimateL
-    const assumedLeaves = this.root.leaves().length + this.root.children.length
+
+    let assumedLeaves = this.handleLabelHeight() // Number of nodes
+    assumedLeaves = assumedLeaves > 300 ? assumedLeaves : 200
+
     let factor = ((deg / (Math.PI * 2) * assumedLeaves) % (assumedLeaves / 2)) - (assumedLeaves / 4)
     factor = deg > Math.PI ? factor : -factor
 
