@@ -7,13 +7,12 @@ const EdgeBundling = function (app) {
 
 EdgeBundling.prototype.setUp = function () {
     const _this = this
-    this.dimensions = [];
     this.groupBy = "parent_site";
 
-    this.dimensions = [];
-    this.dimensionAll = false;
+    this.dimension = "all"
 
-    this.linkColors = d3.scaleOrdinal().range(d3.schemeSet1);
+    this.linkColors = d3.scaleOrdinal().range(["#d94040", "#397fda", "#0099aa", "#b5904b", "#b518bb", "#99b93f", "#299f60", "#b35222"]
+    );
 
     this.darken = function (color) {
         return _this.app.darkMode
@@ -21,7 +20,7 @@ EdgeBundling.prototype.setUp = function () {
             : d3.rgb(color).darker(2).toString();
     };
 
-    this.deltaRad = 0
+    this.deltaRad = Math.PI / 2
 
     this.prevWheeled = ""
 
@@ -42,7 +41,7 @@ EdgeBundling.prototype.setUp = function () {
 
 
 EdgeBundling.prototype.setDimensions = function (k) {
-    this.dimensions = k
+    this.dimension = k
 }
 
 EdgeBundling.prototype.addLayers = function () {
@@ -93,9 +92,6 @@ EdgeBundling.prototype.render = function () {
 
     this.radius = this.getRadius()
 
-
-
-    console.log(this.nodesNumber, this.radius)
     this.controlBoxHeight = d3.select(".control").node().getBoundingClientRect()
         .height;
 
@@ -111,9 +107,6 @@ EdgeBundling.prototype.render = function () {
 }
 
 EdgeBundling.prototype.update = function () {
-    this.dimensions = ["all"];
-    this.dimensionAll = !this.dimensionAll;
-    d3.select(`#dimension-all`).classed("active", this.dimensionAll ? true : false);
     this.setColor()
     this.inputsUpdate();
     this.updateLink();
@@ -163,6 +156,8 @@ EdgeBundling.prototype.addDocumentCounts = function (params) {
 
 EdgeBundling.prototype.addController = function (params) {
     const _this = this
+
+    console.log(this.app.treeData, this.app.similarityDimensions)
     this.inputsDimension = d3
         .select("#similarity-dimension")
         .selectAll("div")
@@ -193,82 +188,60 @@ EdgeBundling.prototype.addController = function (params) {
         d3.selectAll(".dimension").classed("active", false);
         d3.select(`#dimension-${k}`).classed("active", true);
 
-        if (k === "all") {
-            _this.dimensionAll = !_this.dimensionAll ? !_this.dimensionAll : _this.dimensionAll;
-            _this.dimensions = _this.dimensionAll ? ["all"] : [];
-            d3.selectAll(".dimension").classed("active", false);
-            d3.select(`#dimension-all`).classed(
-                "active",
-                _this.dimensionAll ? true : false
-            );
-        } else {
-            if (_this.dimensionAll) {
-                _this.dimensionAll = !_this.dimensionAll;
-                _this.dimensions = [];
-                d3.select(`#dimension-all`).classed("active", false);
-            }
-            _this.setDimensions(k);
-            if (_this.dimensions.length === 0) {
-                _this.dimensions = ["all"];
-                _this.dimensionAll = !_this.dimensionAll;
-                d3.select(`#dimension-all`).classed("active", true);
-                d3.select(`#dimension-all`).classed(
-                    "active",
-                    _this.dimensionAll ? true : false
-                );
-            }
-        }
-        _this.updateLink();
-        //_this.setDimensions(k);
+        _this.setDimensions(k);
         _this.inputsUpdate();
-
-
+        _this.updateLink();
     }
 }
 
 EdgeBundling.prototype.inputsUpdate = function () {
     const _this = this
     this.inputsDimension.style("background-color", (k) => {
-        if (k === "all") {
-            return _this.dimensionAll ? _this.linkColors(k) : _this.app.props.inputBgColor;
-        } else {
-            return _this.dimensions.includes(k) ? _this.linkColors(k) : _this.app.props.inputBgColor;
-        }
+        return _this.dimension === k ? _this.linkColors(k) : _this.app.props.inputBgColor;
     });
 }
 
 EdgeBundling.prototype.addNode = function () {
     const _this = this
+    const data = this.root.leaves()
+
+    d3.selectAll(".node-g").remove()
+    d3.selectAll(".node-text").remove()
 
     this.node = this.layerNodes
         .attr("font-family", "sans-serif")
         .attr("font-size", this.app.props.nodeFontSize)
         .selectAll("g")
-        .data(this.root.leaves(), d => d)
+        .data(data, d => d)
         .join((enter) => enter
             .append("g")
+            .attr("id", d => "g-node" + `${d.data.id}`)
             .attr("class", "node-g")
-            .attr("transform", (d) => `rotate(${(d.x / Math.PI) * 180 - 90}) translate(${d.y},0)`)
-            .append("text")
-            .attr("class", "node-text")
-            .attr("id", d => "node" + `${d.data.id}`)
-            .style("font-family", "Gotham")
-            .attr("stroke", this.app.props.nodeColor)
-            .style("cursor", "pointer")
-            .style("pointer-events", "click")
-            .attr("dy", "0.31em")
-            .attr("x", (d) => (d.x < Math.PI ? 6 : -6))
-            .attr("text-anchor", (d) => (d.x < Math.PI ? "start" : "end"))
-            .attr("transform", (d) => (d.x >= Math.PI ? "rotate(180)" : null))
-            .text(function (d) { return _this.excerpt(d.data.text) })
-            .each(function (d) {
-                d.text = this;
-                d.group = d.data.group;
+            .attr("transform", (d) => {
+                return `rotate(${(d.x / Math.PI) * 180 - 90}) translate(${d.y},0)`
             })
-            .on("click", callNodeClick)
-            .on("mouseover", callNodeOver)
-            .on("mouseout", callNodeOut)
         )
+        .append("text")
+        .attr("class", "node-text")
+        .attr("id", d => "node" + `${d.data.id}`)
+        .style("font-family", d => "Gotham")
+        .attr("stroke", this.app.props.nodeColor)
+        .style("cursor", "pointer")
+        .style("pointer-events", "click")
+        .attr("dy", "0.31em")
+        .attr("x", (d) => (Math.sin(d.x + _this.deltaRad) > Math.sin(Math.PI) ? 6 : -6))
+        .attr("text-anchor", (d) => (Math.sin(d.x + _this.deltaRad) > Math.sin(Math.PI) ? "start" : "end"))
+        .attr("transform", (d) => (Math.sin(d.x + _this.deltaRad) > Math.sin(Math.PI) ? "rotate(0)" : "rotate(180)"))
+        .text(function (d) { return _this.excerpt(d.data.text) })
+        .each(function (d) {
+            d.text = this;
+            d.group = d.data.group;
+        })
+        .on("click", callNodeClick)
+        .on("mouseover", callNodeOver)
+        .on("mouseout", callNodeOut)
+
+    this.layerNodes.attr("transform", `rotate(${_this.deltaRad / Math.PI * 180})`)
 
     function callNodeClick(event, d) {
         _this.nodeClicked(this, event, d)
@@ -290,11 +263,12 @@ EdgeBundling.prototype.nodeOvered = function (that, event, d) {
         .attr("font-size", _this.app.props.nodeFontSizeBold)
         .text(_this.excerptBold(d.data.text))
 
-    let pairedNodes = d.outgoing.concat(d.incoming).filter(function (k) {
-        return _this.dimensionAll
-            ? k.similarity_dimension === "all"
-            : k.similarity_dimension !== "all";
-    });
+    let pairedNodes = d.outgoing.concat(d.incoming)
+    // .filter(function (k) {
+    //     return _this.dimensionAll
+    //         ? k.similarity_dimension === "all"
+    //         : k.similarity_dimension !== "all";
+    // });
 
 
     d3.selectAll(
@@ -304,7 +278,7 @@ EdgeBundling.prototype.nodeOvered = function (that, event, d) {
     )
         .attr("stroke-width", _this.app.props.linkWidthHighlight)
         .attr("stroke", (k) => {
-            return _this.dimensions.includes(k.similarity_dimension)
+            return _this.dimension === k.similarity_dimension
                 ? _this.darken(_this.linkColors(k.similarity_dimension))
                 : _this.darken(_this.app.props.linkBaseColor);
         })
@@ -326,7 +300,7 @@ EdgeBundling.prototype.nodeOvered = function (that, event, d) {
         .attr("font-weight", "bold")
         .attr("fill", (k) => {
             const val = targetText.get(k.data.id).similarity_dimension;
-            return _this.dimensions.includes(val) ? _this.linkColors(val) : _this.app.props.nodeColor();
+            return _this.dimension === val ? _this.linkColors(val) : _this.app.props.nodeColor();
         });
 }
 
@@ -341,7 +315,7 @@ EdgeBundling.prototype.nodeOuted = function (that, event, d) {
         .text(_this.excerpt(d.data.text));
     d3.selectAll(pairedNodes.map((d) => d.path))
         .attr("stroke", (d) => {
-            return _this.dimensions.includes(d.similarity_dimension)
+            return _this.dimension === d.similarity_dimension
                 ? _this.linkColors(d.similarity_dimension)
                 : _this.app.props.linkBaseColor;
         })
@@ -351,7 +325,6 @@ EdgeBundling.prototype.nodeOuted = function (that, event, d) {
     )
         .attr("fill", _this.app.props.nodeColor)
         .attr("font-weight", null);
-
 }
 
 EdgeBundling.prototype.nodeClicked = function (that, event, d) {
@@ -438,6 +411,9 @@ EdgeBundling.prototype.addLink = function () {
                     return this.similarity / 100;
                 })
         )
+    this.layerLinks.attr("transform", `rotate(${_this.deltaRad / Math.PI * 180})`)
+
+
 }
 
 
@@ -452,18 +428,20 @@ EdgeBundling.prototype.addGroupLabel = function () {
         };
     }
 
+    const data = this.root.children.map(d => {
+        const obj = d.arcX
+        obj.groupName = d.groupName
+        return obj
+    })
+
     d3.selectAll(".group-g").remove()
 
     this.groupG = this.layerGroupLabel
         .selectAll("g")
-
-        .data(this.root.children.map(d => {
-            const obj = d.arcX
-            obj.groupName = d.groupName
-            return obj
-        }))
-        .join("g")
-        .attr("class", "group-g")
+        .data(data, d => d)
+        .join(enter => enter.append("g")
+            .attr("class", "group-g"),
+        )
 
     this.groupLabelLines = this.groupG
         .append("path")
@@ -474,7 +452,8 @@ EdgeBundling.prototype.addGroupLabel = function () {
         .attr("fill", "none")
         .attr("opacity", this.app.props.groupLabelOpacity)
         .attr("d", (d) => {
-            const radian = d.start + (d.end - d.start) / 2
+            const radian = //d.start + (d.end - d.start) / 2
+                _this.newRad(_this.deltaRad, d)
             return _this.drawLabelLines(radian, d.start, d.end, d.groupName)
         })
 
@@ -488,6 +467,7 @@ EdgeBundling.prototype.addGroupLabel = function () {
             return i === 0 ? 1 : _this.app.props.groupLabelOpacity
         })
         .call(callDrawLabelArc)
+        .attr("transform", () => `rotate(${_this.deltaRad / (Math.PI * 2) * 360})`)
 
     function callDrawLabelArc(g) {
         _this.drawLabelArc(g)
@@ -498,7 +478,8 @@ EdgeBundling.prototype.addGroupLabel = function () {
         .attr("fill", this.app.props.bgColor)
         .attr("stroke", "none")
         .attr("d", (d) => {
-            const radian = d.start + (d.end - d.start) / 2
+            const radian = //d.start + (d.end - d.start) / 2
+                _this.newRad(_this.deltaRad, d)
             return _this.drawLabelBg(radian, d.start, d.end, d.groupName)
         })
 
@@ -507,7 +488,7 @@ EdgeBundling.prototype.addGroupLabel = function () {
         // .style("pointer-events", "none")
         .style("font-family", "Gotham")
         .attr("rotate", (d) =>
-            (d.start + (d.end - d.start) / 2) > Math.PI ? "180" : "0")
+            _this.newRad(_this.deltaRad, d) > Math.PI ? "180" : "0")
 
     this.groupTextPath = this.groupText
         .append("textPath")
@@ -516,10 +497,14 @@ EdgeBundling.prototype.addGroupLabel = function () {
         .style("text-anchor", "end")
         .style("alignment-baseline", (d) => "middle")
         .attr("fill", "white")
-        .text((d) => d.start + (d.end - d.start) / 2 > Math.PI
-            ? d.groupName.split("").reverse().join("")
-            : d.groupName)
+        .text((d) => {
+            return _this.newRad(_this.deltaRad, d) > Math.PI
+                ? d.groupName.split("").reverse().join("")
+                : d.groupName
+        })
         .attr("startOffset", "100%")
+
+
 }
 
 EdgeBundling.prototype.addZoomEvent = function () {
@@ -567,6 +552,10 @@ EdgeBundling.prototype.addWheelEvent = function () {
             .on("zoom", throttled)
     )
 
+    function callWheeled(e) {
+        _this.wheeled(e)
+    }
+
     function wheeled({ transform, sourceEvent }) {
         const nodeRad = _this.app.props.nodeFontSize / _this.radius
         const rotationY = Math.abs(Math.floor(sourceEvent.wheelDeltaY / 120))
@@ -577,7 +566,7 @@ EdgeBundling.prototype.addWheelEvent = function () {
             const e = sourceEvent.type == "mousemove" ? sourceEvent.movementY :
                 sourceEvent.type == "wheel" ? sourceEvent.deltaY : 0
 
-            const assumedSegment = ((_this.root.leaves().length + _this.root.children.length)) * 2
+            const assumedSegment = ((_this.root.leaves().length + _this.root.children.length)) * 2 + 1
 
             _this.deltaRad = e > 0 ? _this.deltaRad + 2 * Math.PI / assumedSegment : _this.deltaRad - 2 * Math.PI / assumedSegment
 
@@ -588,27 +577,27 @@ EdgeBundling.prototype.addWheelEvent = function () {
             _this.node
                 .attr("x", (d) => (Math.sin(d.x + _this.deltaRad) > Math.sin(Math.PI) ? 6 : -6))
                 .attr("text-anchor", (d) => (Math.sin(d.x + _this.deltaRad) > Math.sin(Math.PI) ? "start" : "end"))
-                .attr("transform", (d) => (Math.sin(d.x + _this.deltaRad) > Math.sin(Math.PI) ? null : "rotate(180)"))
+                .attr("transform", (d) => (Math.sin(d.x + _this.deltaRad) > Math.sin(Math.PI) ? "rotate(0)" : "rotate(180)"))
 
             _this.groupLabelLines.attr("d", (d, i) => {
-                return _this.drawLabelLines(newRad(_this.deltaRad, d), d.start, d.end, d.groupName)
+                return _this.drawLabelLines(_this.newRad(_this.deltaRad, d), d.start, d.end, d.groupName)
             })
 
             _this.groupLabelArc.attr("transform", () => `rotate(${_this.deltaRad / (Math.PI * 2) * 360})`)
 
             _this.groupLabelBg
                 .attr("d", (d) => {
-                    return _this.drawLabelBg(newRad(_this.deltaRad, d), d.start, d.end, d.groupName)
+                    return _this.drawLabelBg(_this.newRad(_this.deltaRad, d), d.start, d.end, d.groupName)
                 })
 
             _this.groupText
                 .attr("rotate", (d) => {
-                    return newRad(_this.deltaRad, d) > Math.PI ? "180" : "0"
+                    return _this.newRad(_this.deltaRad, d) > Math.PI ? "180" : "0"
                 })
 
             _this.groupTextPath
                 .text((d) => {
-                    return newRad(_this.deltaRad, d) > Math.PI
+                    return _this.newRad(_this.deltaRad, d) > Math.PI
                         ? d.groupName.split("").reverse().join("")
                         : d.groupName
                 })
@@ -638,15 +627,14 @@ EdgeBundling.prototype.addWheelEvent = function () {
 
             // }
         }
-
-        // Processing rotation value
-        function newRad(deltaRad, d) {
-            let radian = ((d.start + (d.end - d.start) / 2) + deltaRad) % (Math.PI * 2)
-
-            radian = radian > 0 ? radian : 2 * Math.PI + radian
-            return radian
-        }
     }
+}
+
+EdgeBundling.prototype.newRad = function (deltaRad, d) {
+    let radian = ((d.start + (d.end - d.start) / 2) + deltaRad) % (Math.PI * 2)
+
+    radian = radian > 0 ? radian : 2 * Math.PI + radian
+    return radian
 }
 
 EdgeBundling.prototype.addAudio = function () {
@@ -680,7 +668,7 @@ EdgeBundling.prototype.addTooltip = function () {
         .style("visibility", "hidden");
 }
 
-EdgeBundling.prototype.handleLabelHeight = function (params) {
+EdgeBundling.prototype.handleLabelHeight = function () {
     let assumedLeaves = this.root.leaves().length + this.root.children.length
     if (assumedLeaves < 200) {
         assumedLeaves = 200
@@ -719,7 +707,6 @@ EdgeBundling.prototype.drawLabelBg = function (deg, start, end, groupName) {
     const outer = this.radius + this.app.props.textEstimateL
 
     let assumedLeaves = this.handleLabelHeight() // Number of nodes
-    assumedLeaves = assumedLeaves > 300 ? assumedLeaves : 200
 
     let factor = ((deg / (Math.PI * 2) * assumedLeaves) % (assumedLeaves / 2)) - (assumedLeaves / 4)
     factor = deg > Math.PI ? factor : -factor
@@ -736,8 +723,8 @@ EdgeBundling.prototype.drawLabelBg = function (deg, start, end, groupName) {
     return d3.line()([
         [Math.sin(deg) * (outer + 100) + textLen * 0.05, y2 - halfFont],
         [Math.sin(deg) * (outer + 100) + textLen * 0.05, y2 + halfFont],
-        [Math.sin(deg) * (outer + 100) + textLen * 1.3, y2 + halfFont],
-        [Math.sin(deg) * (outer + 100) + textLen * 1.3, y2 - halfFont],
+        [Math.sin(deg) * (outer + 100) + textLen * 2.3, y2 + halfFont],
+        [Math.sin(deg) * (outer + 100) + textLen * 2.3, y2 - halfFont],
     ])
 }
 
@@ -811,12 +798,12 @@ EdgeBundling.prototype.updateLink = function () {
     const _this = this
     this.link
         .attr("stroke", function (d) {
-            return _this.dimensions.includes(d.similarity_dimension)
+            return _this.dimension === d.similarity_dimension
                 ? _this.linkColors(d.similarity_dimension)
                 : _this.app.props.linkBaseColor;
         })
         .attr("opacity", function (d) {
-            return _this.dimensions.includes(d.similarity_dimension)
+            return _this.dimension === d.similarity_dimension
                 ? (d.similarity / 100).toFixed(2)
                 : 0;
         });
@@ -915,6 +902,7 @@ function bilink(root) {
         for (const o of d.outgoing) o[1].incoming.push(o);
 
     // for (const d of root.leaves()) d.outgoing = d.outgoing.concat(d.incoming);
+
 
     return root;
 }

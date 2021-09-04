@@ -128,7 +128,7 @@ App.prototype.setLayout = function () {
 
 App.prototype.setDataRange = function () {
   this.dataRange = {
-    start: 67,//d3.min(this.dataRolled.keys()),
+    start: d3.min(this.dataRolled.keys()),
     end: d3.max(this.dataRolled.keys())
   }
 }
