@@ -25,7 +25,9 @@ App.prototype.update = function (params) {
 
 App.prototype.setDataTree = function () {
   const _this = this
-  const prepared = prepareData(this.rawData.filter(d => d.similarity >= _this.dataRange.start && d.similarity <= _this.dataRange.end));
+
+  this.filteredRawData = this.rawData.filter(d => d.similarity >= _this.dataRange.start && d.similarity <= _this.dataRange.end)
+  const prepared = prepareData(this.filteredRawData);
   this.treeData = prepared.tree
   this.similarityDimensions = prepared.similarityDimensions
 }
@@ -101,26 +103,26 @@ App.prototype.setLayout = function () {
     linkBaseColor: "#aaa",
     linkWidth: 1,
     linkWidthHighlight: 3,
-    nodeColor: () => (this.darkMode ? "#eee" : "#444"),
+    nodeColor: () => (_this.darkMode ? "#eee" : "#444"),
     nodeFontSize: 10,
     nodeFontSizeBold: 16,
     nodeMargin: 2,
     inputBgColor: "#ccc",
-    controlBoxBg: () => (this.darkMode ? "#666" : "#fff"),
-    controlBoxColor: () => (this.darkMode ? "#fff" : "#111"),
-    controlBoxColor2: () => (this.darkMode ? "#444" : "#eee"),
+    controlBoxBg: () => (_this.darkMode ? "#666" : "#fff"),
+    controlBoxColor: () => (_this.darkMode ? "#fff" : "#111"),
+    controlBoxColor2: () => (_this.darkMode ? "#444" : "#eee"),
     inputBgAll: "#444",
     colorHighlight: "red",
     windowHeight: window.innerHeight,
     windowWidth: window.innerWidth,
     arcWidth: 5,
     arcMargin: 0,
-    bgColor: () => (this.darkMode ? "#222" : "#fff"),
+    bgColor: () => (_this.darkMode ? "#222" : "#fff"),
     groupLabelSize: 22,
     groupLabelRatio: 0.45,
-    groupLinesColor: () => this.darkMode ? "#fff" : "#111",
+    groupLinesColor: () => _this.darkMode ? "#fff" : "#111",
     groupLabelOpacity: 0.4,
-    tooltipBg: () => (this.darkMode ? "#ddd" : "#fff"),
+    tooltipBg: () => (_this.darkMode ? "#ddd" : "#fff"),
     textEstimateL: 200,
   };
 

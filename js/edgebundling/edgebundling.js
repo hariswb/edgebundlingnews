@@ -28,7 +28,6 @@ EdgeBundling.prototype.setUp = function () {
         .map((d) => d.children.length)
         .reduce((sum, x) => sum + x);
 
-
     this.radius = this.getRadius()
 
     this.controlBoxHeight = d3.select(".control").node().getBoundingClientRect()
@@ -86,30 +85,36 @@ EdgeBundling.prototype.getRadius = function () {
 }
 
 EdgeBundling.prototype.render = function () {
+    d3.selectAll(".dimension").classed("active", false);
+    d3.select(`#dimension-${this.dimension}`).classed("active", true);
+
     this.nodesNumber = this.app.treeData.children
         .map((d) => d.children.length)
-        .reduce((sum, x) => sum + x);
 
-    this.radius = this.getRadius()
+    if (this.nodesNumber.length > 0) {
+        this.nodesNumber = this.nodesNumber
+            .reduce((sum, x) => sum + x);
 
-    this.controlBoxHeight = d3.select(".control").node().getBoundingClientRect()
-        .height;
+        this.radius = this.getRadius()
+        this.tree = d3.cluster().size([2 * Math.PI, this.radius]);
+        this.root = this.tree(bilink(d3.hierarchy(this.app.treeData)));
 
-    this.tree = d3.cluster().size([2 * Math.PI, this.radius]);
-    this.root = this.tree(bilink(d3.hierarchy(this.app.treeData)));
+        this.addWheel()
+        this.addNode()
+        this.addLink()
+        this.addGroupLabel()
 
-    this.addWheel()
-    this.addNode()
-    this.addLink()
-    this.addGroupLabel()
+        this.setColor()
+        this.inputsUpdate();
+        this.updateLink();
+    } else {
+        d3.selectAll(".node-g").remove()
+        d3.selectAll(".link-path").remove()
+        d3.selectAll(".group-g").remove()
+    }
 
-    this.update()
-}
+    this.addDocumentCounts()
 
-EdgeBundling.prototype.update = function () {
-    this.setColor()
-    this.inputsUpdate();
-    this.updateLink();
 }
 
 EdgeBundling.prototype.addBg = function () {
@@ -151,13 +156,12 @@ EdgeBundling.prototype.addWheel = function () {
 }
 
 EdgeBundling.prototype.addDocumentCounts = function (params) {
-    const documentCounts = d3.select("#document-counts").html(this.app.rawData.length);
+    const documentCounts = d3.select("#document-counts").html(this.app.filteredRawData.length);
 }
 
 EdgeBundling.prototype.addController = function (params) {
     const _this = this
 
-    console.log(this.app.treeData, this.app.similarityDimensions)
     this.inputsDimension = d3
         .select("#similarity-dimension")
         .selectAll("div")
@@ -237,23 +241,18 @@ EdgeBundling.prototype.addNode = function () {
             d.text = this;
             d.group = d.data.group;
         })
-        .on("click", callNodeClick)
-        .on("mouseover", callNodeOver)
-        .on("mouseout", callNodeOut)
+        .on("click", function (event, d) {
+            _this.nodeClicked(this, event, d)
+        })
+        .on("mouseover",
+            function (event, d) {
+                _this.nodeOvered(this, event, d)
+            })
+        .on("mouseout", function (event, d) {
+            _this.nodeOuted(this, event, d)
+        })
 
     this.layerNodes.attr("transform", `rotate(${_this.deltaRad / Math.PI * 180})`)
-
-    function callNodeClick(event, d) {
-        _this.nodeClicked(this, event, d)
-    }
-
-    function callNodeOver(event, d) {
-        _this.nodeOvered(this, event, d)
-    }
-
-    function callNodeOut(event, d) {
-        _this.nodeOuted(this, event, d)
-    }
 }
 
 EdgeBundling.prototype.nodeOvered = function (that, event, d) {
@@ -390,6 +389,7 @@ EdgeBundling.prototype.nodeClicked = function (that, event, d) {
 
 EdgeBundling.prototype.addLink = function () {
     const _this = this
+    d3.selectAll(".link-path").remove()
     this.link = this.layerLinks
         .style("pointer-events", "none")
         .attr("stroke", this.app.props.linkBaseColor)
@@ -399,6 +399,7 @@ EdgeBundling.prototype.addLink = function () {
         .data(this.root.leaves().flatMap((leaf) => leaf.outgoing), d => d)
         .join(
             (enter) => enter.append("path")
+                .attr("class", "link-path")
                 .attr("d", ([i, o]) => {
                     return _this.line(i.path(o));
                 })
@@ -668,23 +669,15 @@ EdgeBundling.prototype.addTooltip = function () {
         .style("visibility", "hidden");
 }
 
-EdgeBundling.prototype.handleLabelHeight = function () {
-    let assumedLeaves = this.root.leaves().length + this.root.children.length
-    if (assumedLeaves < 200) {
-        assumedLeaves = 200
-    } else if (assumedLeaves < 300) {
-        assumedLeaves = 300
-    }
-    return assumedLeaves
-}
+EdgeBundling.prototype.handleLabelHeight = function (deg, groupName) {
 
-EdgeBundling.prototype.drawLabelLines = function (deg, start, end, groupName) {
     const outer = this.radius + this.app.props.textEstimateL * 1.2 + this.app.props.arcWidth
 
-    let assumedLeaves = this.handleLabelHeight() // Number of nodes
+    let assumedLeaves = this.root.leaves().length + this.root.children.length
+    assumedLeaves = assumedLeaves < 200 ? 200 : assumedLeaves < 300 ? 300 : assumedLeaves
 
     let factor = ((deg / (Math.PI * 2) * assumedLeaves) % (assumedLeaves / 2)) - (assumedLeaves / 4)
-    factor = deg >= Math.PI ? factor : -factor
+    factor = deg >= Math.PI && deg < Math.PI * 2 ? factor : -factor
 
     let groupToNodeRatio = (this.root.children.length / this.root.leaves().length) * 0.5
 
@@ -692,9 +685,13 @@ EdgeBundling.prototype.drawLabelLines = function (deg, start, end, groupName) {
 
     let textLen =
         groupName.length * this.app.props.groupLabelSize * this.app.props.groupLabelRatio;
+    textLen = deg > Math.PI ? -textLen : textLen
 
-    textLen = deg >= Math.PI ? -textLen : textLen
+    return { assumedLeaves: assumedLeaves, outer: outer, y2: y2, textLen: textLen }
+}
 
+EdgeBundling.prototype.drawLabelLines = function (deg, start, end, groupName) {
+    let { outer, assumedLeaves, y2, textLen } = this.handleLabelHeight(deg, groupName)
     return d3.line()([
         // [Math.sin(deg)*radius,-Math.cos(deg)*radius],
         [Math.sin(deg) * outer, -Math.cos(deg) * outer],
@@ -704,27 +701,15 @@ EdgeBundling.prototype.drawLabelLines = function (deg, start, end, groupName) {
 }
 
 EdgeBundling.prototype.drawLabelBg = function (deg, start, end, groupName) {
-    const outer = this.radius + this.app.props.textEstimateL
-
-    let assumedLeaves = this.handleLabelHeight() // Number of nodes
-
-    let factor = ((deg / (Math.PI * 2) * assumedLeaves) % (assumedLeaves / 2)) - (assumedLeaves / 4)
-    factor = deg > Math.PI ? factor : -factor
-
-    let groupToNodeRatio = (this.root.children.length / this.root.leaves().length) * 0.5
-
-    const y2 = -factor * this.app.props.nodeFontSize * (1.5 + groupToNodeRatio)
-    let textLen =
-        groupName.length * this.app.props.groupLabelSize * this.app.props.groupLabelRatio;
-    textLen = deg > Math.PI ? -textLen : textLen
+    let { outer, assumedLeaves, y2, textLen } = this.handleLabelHeight(deg, groupName)
 
     const halfFont = this.app.props.groupLabelSize / 2
 
     return d3.line()([
         [Math.sin(deg) * (outer + 100) + textLen * 0.05, y2 - halfFont],
         [Math.sin(deg) * (outer + 100) + textLen * 0.05, y2 + halfFont],
-        [Math.sin(deg) * (outer + 100) + textLen * 2.3, y2 + halfFont],
-        [Math.sin(deg) * (outer + 100) + textLen * 2.3, y2 - halfFont],
+        [Math.sin(deg) * (outer + 100) + textLen * 1.3, y2 + halfFont],
+        [Math.sin(deg) * (outer + 100) + textLen * 1.3, y2 - halfFont],
     ])
 }
 
@@ -755,9 +740,10 @@ EdgeBundling.prototype.drawLabelArc = function (g) {
 
 EdgeBundling.prototype.setColor = function () {
     const _this = this
+    console.log(this.app.props.nodeColor())
 
     this.bg.attr("fill", this.app.props.bgColor);
-    this.node.attr("fill", this.app.props.nodeColor);
+    d3.selectAll(".node-text").attr("stroke", this.app.props.nodeColor);
     this.tooltip
         .style("background-color", this.app.props.tooltipBg)
         .style("color", this.app.props.tooltipBg);
