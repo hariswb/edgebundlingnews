@@ -20,7 +20,7 @@ EdgeBundling.prototype.setUp = function () {
             : d3.rgb(color).darker(2).toString();
     };
 
-    this.deltaRad = Math.PI / 2
+    this.deltaRad = Math.PI / 4
 
     this.prevWheeled = ""
 
@@ -126,6 +126,7 @@ EdgeBundling.prototype.addBg = function () {
         .attr("width", this.app.props.windowWidth)
         .attr("height", this.app.props.windowHeight)
         .attr("fill", this.app.props.bgColor)
+        .attr("id", "bg-rect")
         .on("click", clickBg);
 
     function clickBg(event, d) {
@@ -556,6 +557,8 @@ EdgeBundling.prototype.addZoomEvent = function () {
     d3.select("#toggle-center-button").on('click', function () {
         zoomedElement.transition()
             .duration(750).call(zoom.transform, d3.zoomIdentity);
+
+        $(`#bg-rect`).d3Mouseclick()
     })
 
     function zoomed({ transform }) {
