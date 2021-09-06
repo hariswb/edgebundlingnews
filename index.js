@@ -23,6 +23,7 @@ App.prototype.update = function () {
   this.edgeBundling.updateNode()
   this.edgeBundling.updateLink()
   this.edgeBundling.addDocumentCounts()
+  this.edgeBundling.setColor()
 }
 
 App.prototype.setDataTree = function () {
