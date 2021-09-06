@@ -70,18 +70,20 @@ EdgeBundling.prototype.init = function () {
     this.addTooltip()
     this.addAudio()
     this.addWheel()
-    this.addDocumentCounts()
     this.addController()
 
     this.addZoomEvent()
     this.addWheelEvent()
+
+    this.render()
+    this.getDisplayedNode()
+    this.updateNode()
+    this.updateLink()
 }
 
 EdgeBundling.prototype.getRadius = function () {
     const r = ((this.nodesNumber + this.app.treeData.children.length) * (this.app.props.nodeFontSize + this.app.props.nodeMargin)) / (2 * Math.PI);
     return r > 300 ? r : 300
-
-
 }
 
 EdgeBundling.prototype.render = function () {
@@ -114,7 +116,6 @@ EdgeBundling.prototype.render = function () {
     }
 
     this.addDocumentCounts()
-
 }
 
 EdgeBundling.prototype.addBg = function () {
@@ -155,8 +156,14 @@ EdgeBundling.prototype.addWheel = function () {
         .attr("opacity", 0.1)
 }
 
-EdgeBundling.prototype.addDocumentCounts = function (params) {
-    const documentCounts = d3.select("#document-counts").html(this.app.filteredRawData.length);
+EdgeBundling.prototype.addDocumentCounts = function () {
+    const _this = this
+
+    const links = this.app.rawData
+        .filter(d => d.similarity >= _this.app.dataRange.start && d.similarity <= _this.app.dataRange.end)
+
+    console.log(links)
+    const documentCounts = d3.select("#document-counts").html(links.length);
 }
 
 EdgeBundling.prototype.addController = function (params) {
@@ -206,6 +213,38 @@ EdgeBundling.prototype.inputsUpdate = function () {
 }
 
 
+
+EdgeBundling.prototype.addLink = function () {
+    const _this = this
+    const data = this.root.leaves().flatMap((leaf) => leaf.outgoing)
+        .filter(d => d.similarity >= _this.app.dataRange.start && d.similarity <= _this.app.dataRange.end)
+
+    d3.selectAll(".link-path").remove()
+    this.link = this.layerLinks
+        .style("pointer-events", "none")
+        .attr("stroke", this.app.props.linkBaseColor)
+        .attr("stroke-width", this.app.props.linkWidth)
+        .attr("fill", "none")
+        .selectAll("path")
+        .data(data, d => d)
+        .join(
+            (enter) => enter.append("path")
+                .attr("class", "link-path")
+                .attr("d", ([i, o]) => {
+                    return _this.line(i.path(o));
+                })
+                .each(function (d) {
+                    this.similarity = d.similarity;
+                    this.similarity_dimension = d.similarity_dimension;
+                    d.path = this;
+                })
+                .attr("opacity", function (d) {
+                    return this.similarity / 100;
+                }),
+        )
+    this.layerLinks.attr("transform", `rotate(${_this.deltaRad / Math.PI * 180})`)
+}
+
 EdgeBundling.prototype.addNode = function () {
     const _this = this
     const data = this.root.leaves()
@@ -221,9 +260,11 @@ EdgeBundling.prototype.addNode = function () {
             .append("g")
             .attr("id", d => "g-node" + `${d.data.id}`)
             .attr("class", "node-g")
+
+            .attr("opacity", 1)
             .attr("transform", (d) => {
                 return `rotate(${d.x / Math.PI * 180 - 90}) translate(${d.y},0)`
-            })
+            }),
         )
         .append("text")
         .attr("class", "node-text")
@@ -251,8 +292,24 @@ EdgeBundling.prototype.addNode = function () {
         .on("mouseout", function (event, d) {
             _this.nodeOuted(this, event, d)
         })
-
     this.layerNodes.attr("transform", `rotate(${_this.deltaRad / Math.PI * 180})`)
+}
+
+EdgeBundling.prototype.getDisplayedNode = function () {
+    const _this = this
+
+    this.displayedNodes = this.root.leaves().filter(d => {
+        const links = d.outgoing.concat(d.incoming)
+        const values = links.map(o => o.similarity >= _this.app.dataRange.start && o.similarity <= _this.app.dataRange.end)
+            .reduce((a, b) => a || b)
+        return values
+    })
+}
+
+EdgeBundling.prototype.updateNode = function () {
+    const _this = this
+    const idsDisplayedNodes = this.displayedNodes.map(d => d.data.id)
+    this.node.attr("opacity", d => idsDisplayedNodes.includes(d.data.id) ? 1 : 0.3)
 }
 
 EdgeBundling.prototype.nodeOvered = function (that, event, d) {
@@ -331,7 +388,7 @@ EdgeBundling.prototype.nodeClicked = function (that, event, d) {
     const pairedNodes = d.outgoing.concat(d.incoming);
     const targetText = new Map();
 
-    const targets = pairedNodes.map((k) => {
+    let targets = pairedNodes.map((k) => {
         const [i, o] = k;
         const selected = i.data.id === d.data.id ? o.data : i.data;
         targetText.set(k.similarity_dimension + selected.id, {
@@ -354,6 +411,10 @@ EdgeBundling.prototype.nodeClicked = function (that, event, d) {
                 const la = targetText.get(a.group + a.node.data.id);
                 const lb = targetText.get(b.group + b.node.data.id);
                 return lb.similarity - la.similarity;
+            })
+            .filter(k => {
+                const val = targetText.get(k.group + k.node.data.id);
+                return val.similarity >= _this.app.dataRange.start && val.similarity <= _this.app.dataRange.end
             })
             .map((k) => {
                 const val = targetText.get(k.group + k.node.data.id);
@@ -385,36 +446,6 @@ EdgeBundling.prototype.nodeClicked = function (that, event, d) {
       `);
 
     this.tooltipPosition(event);
-}
-
-EdgeBundling.prototype.addLink = function () {
-    const _this = this
-    d3.selectAll(".link-path").remove()
-    this.link = this.layerLinks
-        .style("pointer-events", "none")
-        .attr("stroke", this.app.props.linkBaseColor)
-        .attr("stroke-width", this.app.props.linkWidth)
-        .attr("fill", "none")
-        .selectAll("path")
-        .data(this.root.leaves().flatMap((leaf) => leaf.outgoing), d => d)
-        .join(
-            (enter) => enter.append("path")
-                .attr("class", "link-path")
-                .attr("d", ([i, o]) => {
-                    return _this.line(i.path(o));
-                })
-                .each(function (d) {
-                    this.similarity = d.similarity;
-                    this.similarity_dimension = d.similarity_dimension;
-                    d.path = this;
-                })
-                .attr("opacity", function (d) {
-                    return this.similarity / 100;
-                })
-        )
-    this.layerLinks.attr("transform", `rotate(${_this.deltaRad / Math.PI * 180})`)
-
-
 }
 
 
@@ -542,7 +573,7 @@ EdgeBundling.prototype.addZoomEvent = function () {
 
 EdgeBundling.prototype.addWheelEvent = function () {
     const _this = this
-    const throttled = _.throttle(wheeled, 10)
+    const throttled = _.throttle(wheeled, 50)
     this.layerChart.call(
         d3.zoom()
             .extent([
@@ -558,8 +589,6 @@ EdgeBundling.prototype.addWheelEvent = function () {
     }
 
     function wheeled({ transform, sourceEvent }) {
-        const nodeRad = _this.app.props.nodeFontSize / _this.radius
-        const rotationY = Math.abs(Math.floor(sourceEvent.wheelDeltaY / 120))
 
         rotateWheel()
 
@@ -606,7 +635,7 @@ EdgeBundling.prototype.addWheelEvent = function () {
 
             // Fake click and hover event triggering tooltip on wheel
 
-            const nodeFocus = _this.root.leaves()
+            const nodeFocus = _this.displayedNodes
                 .filter(d => {
                     let radianFocus = (d.x + _this.deltaRad) % (Math.PI * 2)
                     radianFocus = radianFocus < 0 ? 2 * Math.PI + radianFocus : radianFocus
@@ -621,11 +650,10 @@ EdgeBundling.prototype.addWheelEvent = function () {
                 $(".node-text").d3Mouseout()
                 $(`#node${nodeFocus.data.id}`).d3Mouseover()
 
-                // if (prevWheeled !== nodeFocus.data.id) {
-                //     $(`#audio-wheel-button`).d3Mouseclick()
-                //     prevWheeled = nodeFocus.data.id
-                // }
-
+                if (_this.prevWheeled !== nodeFocus.data.id) {
+                    $(`#audio-wheel-button`).d3Mouseclick()
+                    _this.prevWheeled = nodeFocus.data.id
+                }
             }
         }
     }
@@ -648,11 +676,12 @@ EdgeBundling.prototype.addAudio = function () {
         _this.enableSoundNotice.style("display", "none")
     })
 
-    const audioPromise = document.getElementById("audio-wheel")
+    const audioElement = document.getElementById("audio-wheel")
 
     d3.select("#audio-wheel-button").on("click", () => {
-        audioPromise.currentTime = 0
-        audioPromise.play()
+        audioElement.currentTime = 0
+        audioElement.volume = 0.3
+        audioElement.play()
     })
 
 }
@@ -788,10 +817,13 @@ EdgeBundling.prototype.updateLink = function () {
                 : _this.app.props.linkBaseColor;
         })
         .attr("opacity", function (d) {
-            return _this.dimension === d.similarity_dimension
+            let opc = _this.dimension === d.similarity_dimension
                 ? (d.similarity / 100).toFixed(2)
                 : 0;
-        });
+            opc = d.similarity >= _this.app.dataRange.start && d.similarity <= _this.app.dataRange.end ?
+                opc : 0
+            return opc
+        })
 }
 
 
