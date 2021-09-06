@@ -162,7 +162,6 @@ EdgeBundling.prototype.addDocumentCounts = function () {
     const links = this.app.rawData
         .filter(d => d.similarity >= _this.app.dataRange.start && d.similarity <= _this.app.dataRange.end)
 
-    console.log(links)
     const documentCounts = d3.select("#document-counts").html(links.length);
 }
 
