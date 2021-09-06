@@ -128,7 +128,7 @@ EdgeBundling.prototype.addBg = function () {
         .on("click", clickBg);
 
     function clickBg(event, d) {
-        $(".node-text").d3Mouseout()
+        $(".node-canvas").d3Mouseout()
         d3.select("#tooltip").style("visibility", "hidden");
     }
 }
@@ -205,6 +205,7 @@ EdgeBundling.prototype.inputsUpdate = function () {
     });
 }
 
+
 EdgeBundling.prototype.addNode = function () {
     const _this = this
     const data = this.root.leaves()
@@ -213,7 +214,6 @@ EdgeBundling.prototype.addNode = function () {
     d3.selectAll(".node-text").remove()
 
     this.node = this.layerNodes
-        .attr("font-family", "sans-serif")
         .attr("font-size", this.app.props.nodeFontSize)
         .selectAll("g")
         .data(data, d => d)
@@ -222,7 +222,7 @@ EdgeBundling.prototype.addNode = function () {
             .attr("id", d => "g-node" + `${d.data.id}`)
             .attr("class", "node-g")
             .attr("transform", (d) => {
-                return `rotate(${(d.x / Math.PI) * 180 - 90}) translate(${d.y},0)`
+                return `rotate(${d.x / Math.PI * 180 - 90}) translate(${d.y},0)`
             })
         )
         .append("text")
@@ -614,19 +614,19 @@ EdgeBundling.prototype.addWheelEvent = function () {
                         radianFocus < Math.PI / 2 + _this.app.props.nodeFontSize / _this.radius
                 })[0]
 
-            // if (nodeFocus !== undefined) {
-            //     const fakeClickEvent = { pageX: sourceEvent.clientX + _this.props.textEstimateL * 2 + 100, pageY: controlBoxHeight + 30 }
-            //     _this.nodeClicked(fakeClickEvent, nodeFocus)
+            if (nodeFocus !== undefined) {
+                const fakeClickEvent = { pageX: sourceEvent.clientX + _this.app.props.textEstimateL * 2 + 100, pageY: _this.controlBoxHeight + 30 }
+                _this.nodeClicked(_this, fakeClickEvent, nodeFocus)
 
-            //     $(".node-text").d3Mouseout()
-            //     $(`#node${nodeFocus.data.id}`).d3Mouseover()
+                $(".node-text").d3Mouseout()
+                $(`#node${nodeFocus.data.id}`).d3Mouseover()
 
-            //     // if (prevWheeled !== nodeFocus.data.id) {
-            //     //     $(`#audio-wheel-button`).d3Mouseclick()
-            //     //     prevWheeled = nodeFocus.data.id
-            //     // }
+                // if (prevWheeled !== nodeFocus.data.id) {
+                //     $(`#audio-wheel-button`).d3Mouseclick()
+                //     prevWheeled = nodeFocus.data.id
+                // }
 
-            // }
+            }
         }
     }
 }
@@ -740,7 +740,6 @@ EdgeBundling.prototype.drawLabelArc = function (g) {
 
 EdgeBundling.prototype.setColor = function () {
     const _this = this
-    console.log(this.app.props.nodeColor())
 
     this.bg.attr("fill", this.app.props.bgColor);
     d3.selectAll(".node-text").attr("stroke", this.app.props.nodeColor);

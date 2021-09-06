@@ -103,7 +103,7 @@ App.prototype.setLayout = function () {
     linkBaseColor: "#aaa",
     linkWidth: 1,
     linkWidthHighlight: 3,
-    nodeColor: () => (_this.darkMode ? "#eee" : "#444"),
+    nodeColor: () => (_this.darkMode ? "#eeeeee" : "#222222"),
     nodeFontSize: 10,
     nodeFontSizeBold: 16,
     nodeMargin: 2,
